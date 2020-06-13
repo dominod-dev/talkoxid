@@ -1,0 +1,15 @@
+[package]
+name = "oxychat"
+version = "0.1.0"
+authors = ["Dominod <dev@dominod.fr>"]
+edition = "2018"
+
+[[bin]]
+bench = false
+path = "src/bin/main.rs"
+name = "oxychat"
+
+[dependencies.cursive]
+version = "0.15"
+default-features = false
+features = ["toml", "ncurses-backend"]
