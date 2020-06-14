@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+pub mod chats;
+pub mod views;
+use std::fmt;
+use std::hash::{Hash, Hasher};
 
 #[derive(Clone)]
 pub struct Message {
@@ -6,97 +9,47 @@ pub struct Message {
     pub content: String,
 }
 
+#[derive(Eq, PartialEq, Clone)]
 pub enum Channel {
     Group(String),
     User(String),
 }
 
-pub trait Chat {
-    fn channels(&self) -> &Vec<String>;
-    fn friends(&self) -> &Vec<String>;
-    fn last_10_messages(&self, channel: Channel) -> &Vec<Message>;
-    fn send_message(&mut self, content: String, channel: Channel);
-}
-
-pub struct DummyChat {
-    channels: Vec<String>,
-    friends: Vec<String>,
-    messages: HashMap<String, Vec<Message>>,
-}
-
-impl DummyChat {
-    pub fn new() -> Self {
-        let channels = vec![
-            String::from("general"),
-            String::from("another"),
-            String::from("YetAnother"),
-        ];
-        let friends = vec![
-            String::from("John"),
-            String::from("Bob"),
-            String::from("Lola"),
-        ];
-        let mut messages = HashMap::new();
-        messages.insert(
-            String::from("general"),
-            vec![
-                Message {
-                    author: String::from("Bob"),
-                    content: String::from("Salut"),
-                },
-                Message {
-                    author: String::from("John"),
-                    content: String::from("Hi!"),
-                },
-                Message {
-                    author: String::from("Lola"),
-                    content: String::from("Arriba!"),
-                },
-            ],
-        );
-        DummyChat {
-            channels,
-            friends,
-            messages,
+impl fmt::Display for Channel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Channel::Group(g) => write!(f, "{}", g),
+            Channel::User(u) => write!(f, "{}", u),
         }
     }
 }
 
-impl Chat for DummyChat {
-    fn channels(&self) -> &Vec<String> {
-        &self.channels
-    }
-
-    fn friends(&self) -> &Vec<String> {
-        &self.friends
-    }
-
-    fn last_10_messages(&self, channel: Channel) -> &Vec<Message> {
-        let messages = match channel {
-            Channel::Group(g) => self.messages.get(&g).unwrap(),
-            Channel::User(f) => self.messages.get(&f).unwrap(),
-        };
-        return messages;
-    }
-
-    fn send_message(&mut self, content: String, channel: Channel) {
-        let current_channel: String;
-        let messages = match channel {
+impl Hash for Channel {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
             Channel::Group(g) => {
-                current_channel = String::from(&g);
-                self.messages.get(&g).unwrap()
+                "group".hash(state);
+                g.hash(state);
             }
-            Channel::User(f) => {
-                current_channel = String::from(&f);
-                self.messages.get(&f).unwrap()
+            Channel::User(u) => {
+                "user".hash(state);
+                u.hash(state);
             }
-        };
-        let mut new_messages = (*messages).clone();
-        let mut new_value = vec![Message {
-            author: String::from("me"),
-            content,
-        }];
-        new_messages.append(&mut new_value);
-        self.messages.insert(current_channel, new_messages);
+        }
     }
+}
+
+pub enum ChatEvent {
+    SendMessage(String),
+    RecvMessage(Message, Channel),
+    Init(Channel),
+}
+
+pub trait Chat {
+    fn channels(&self) -> &Vec<String>;
+    fn friends(&self) -> &Vec<String>;
+    fn init_view(&mut self, channel: Channel) -> &Vec<Message>;
+    fn send_message(&mut self, content: String);
+    fn display_message(&self, message: Message, channel: &Channel);
+    fn add_message(&mut self, message: Message, channel: Channel);
 }

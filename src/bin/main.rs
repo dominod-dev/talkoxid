@@ -1,105 +1,53 @@
-use cursive::event::{Callback, Event, EventResult, Key};
 use cursive::theme::{Color, ColorStyle, ColorType};
 use cursive::traits::*;
-use cursive::view::{ScrollStrategy, SizeConstraint, ViewWrapper};
-use cursive::views::{
-    Layer, LinearLayout, ResizedView, ScrollView, SelectView, TextArea, TextView,
-};
-use cursive::wrap_impl;
-use cursive::{CbSink, Cursive};
-use std::rc::Rc;
+use cursive::view::{ScrollStrategy, SizeConstraint};
+use cursive::views::{Layer, LinearLayout, ResizedView, ScrollView, SelectView, TextView};
+use cursive::Cursive;
 use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
 
-use oxychat::{Channel, Chat, DummyChat, Message};
+use oxychat::chats::DummyChat;
+use oxychat::views::{BufferView, MessageBoxView};
+use oxychat::{Channel, Chat, ChatEvent, Message};
 
-struct MessageBoxView {
-    view: TextArea,
-    tx: mpsc::Sender<String>,
-}
-
-impl MessageBoxView {
-    // Creates a new view with the given buffer size
-    fn new(tx: mpsc::Sender<String>) -> Self {
-        let view = TextArea::new();
-        MessageBoxView { tx, view }
-    }
-}
-
-fn update_chat(siv: &mut Cursive) {
-    siv.call_on_name("chat", |view: &mut BufferView| view._update());
-}
-
-impl ViewWrapper for MessageBoxView {
-    wrap_impl!(self.view: TextArea);
-    fn wrap_on_event<'r>(&mut self, event: Event) -> EventResult {
-        match event {
-            Event::Key(Key::Enter) => {
-                self.tx.send(String::from(self.view.get_content())).unwrap();
-                self.view.set_content("");
-                EventResult::Consumed(Some(Callback::from_fn(update_chat)))
-            }
-            ev => self.view.on_event(ev),
-        }
-    }
-}
-
-struct BufferView {
-    _rx: mpsc::Receiver<String>,
-    view: TextView,
-    _cb_sink: CbSink,
-    chat_system: Rc<dyn Chat>,
-}
-
-impl BufferView {
-    fn new(rx: mpsc::Receiver<String>, cb_sink: CbSink, chat_system: Rc<dyn Chat>) -> Self {
-        let view = TextView::new("");
-        BufferView {
-            _rx: rx,
-            view,
-            _cb_sink: cb_sink,
-            chat_system,
-        }
-    }
-
-    fn _update(&mut self) {
-        // while let Ok(line) = self._rx.try_recv() {
-        //     self.view.append(format!("{}\n", &line));
-        //     self._cb_sink.send(Box::new(Cursive::noop)).unwrap();
-        // }
-        self.view.set_content(
-            self.chat_system
-                .last_10_messages(Channel::Group(String::from("general")))
-                .iter()
-                .fold(String::from(""), |x, y| {
-                    format!("{}\n[{}]: {}", x, y.author, y.content)
-                }),
-        )
-    }
-}
-
-impl<'a> ViewWrapper for BufferView {
-    wrap_impl!(self.view: TextView);
-}
-
-fn update_channel<'r>(_tx: mpsc::Sender<String>) -> impl Fn(&mut Cursive, &str) -> () {
-    let closure = move |siv: &mut Cursive, item: &str| {
-        siv.call_on_name("chat", |view: &mut BufferView| view._update());
-        siv.call_on_name("channel_name", |view: &mut TextView| {
-            view.set_content(format!("#{}", item))
+fn update_channel<'r>(tx: mpsc::Sender<ChatEvent>) -> impl Fn(&mut Cursive, &Channel) -> () {
+    let closure = move |siv: &mut Cursive, item: &Channel| {
+        siv.call_on_name("channel_name", |view: &mut TextView| match item {
+            Channel::Group(_) => view.set_content(format!("#{}", item)),
+            Channel::User(_) => view.set_content(format!("{}", item)),
         });
+        tx.send(ChatEvent::Init(item.clone())).unwrap();
+        siv.focus_name("input").unwrap();
     };
     return closure;
 }
 
+fn async_chat_update(mut chat_system: Box<dyn Chat>, rx: mpsc::Receiver<ChatEvent>) {
+    chat_system.init_view(Channel::Group("general".to_string()));
+    loop {
+        match rx.recv() {
+            Ok(ChatEvent::SendMessage(message)) => {
+                chat_system.send_message(message);
+            }
+            Ok(ChatEvent::Init(channel)) => {
+                chat_system.init_view(channel);
+            }
+            Ok(ChatEvent::RecvMessage(message, channel)) => {
+                chat_system.add_message(message, channel);
+            }
+            Err(_) => continue,
+        };
+    }
+}
+
 fn main() {
     let mut siv = cursive::default();
-    let chat_system = Rc::new(DummyChat::new());
-
     let cb_sink = siv.cb_sink().clone();
-    siv.add_global_callback('q', |s| s.quit());
     let (tx, rx) = mpsc::channel();
+
+    siv.add_global_callback('q', |s| s.quit());
     let tx1 = mpsc::Sender::clone(&tx);
-    let tx2 = mpsc::Sender::clone(&tx);
 
     let white = ColorType::Color(Color::Rgb(255, 255, 255));
     let black = ColorType::Color(Color::Rgb(0, 0, 0));
@@ -111,9 +59,8 @@ fn main() {
     // Or you can directly load it from a string for easy deployment.
     // siv.load_toml(include_str!("../../assets/style.toml"))
     //     .unwrap();
-    let chat_cloned = Rc::clone(&chat_system);
     let mut buffer = ScrollView::new(
-        BufferView::new(rx, cb_sink.clone(), chat_cloned)
+        BufferView::new(cb_sink.clone())
             .with_name("chat")
             .full_screen(),
     );
@@ -122,7 +69,7 @@ fn main() {
         ResizedView::new(SizeConstraint::Full, SizeConstraint::Full, buffer),
         white_on_black,
     );
-    let message_input_box = MessageBoxView::new(tx1);
+    let message_input_box = MessageBoxView::new(tx1).with_name("input");
     let message_input = ResizedView::new(
         SizeConstraint::Full,
         SizeConstraint::AtLeast(10),
@@ -137,22 +84,12 @@ fn main() {
             .child(TextView::new("Message:"))
             .child(message_input),
     );
-    let chat_cloned = Rc::clone(&chat_system);
-    for mess in chat_cloned.last_10_messages(Channel::Group(String::from("general"))) {
-        tx.send(format!("[{}]: {}", mess.author, mess.content))
-            .unwrap();
-    }
-    let mut channel_list = SelectView::new().on_submit(update_channel(tx2));
-    let chat_cloned = Rc::clone(&chat_system);
-    for ch in chat_cloned.channels() {
-        channel_list.add_item_str(ch)
-    }
-    let mut users_list = SelectView::new().on_submit(|s, item: &str| {
-        s.call_on_name("channel_name", |view: &mut TextView| view.set_content(item));
-    });
-    for ch in chat_system.friends() {
-        users_list.add_item_str(ch)
-    }
+    let channel_list = SelectView::<Channel>::new()
+        .on_submit(update_channel(mpsc::Sender::clone(&tx)))
+        .with_name("channel_list");
+    let users_list = SelectView::<Channel>::new()
+        .on_submit(update_channel(mpsc::Sender::clone(&tx)))
+        .with_name("users_list");
     let channel_users = ScrollView::new(
         LinearLayout::vertical()
             .child(TextView::new("CHANNELS:"))
@@ -170,6 +107,23 @@ fn main() {
         .child(chat_layout);
 
     siv.add_fullscreen_layer(global_layout);
-
+    let chat_system = Box::new(DummyChat::new(cb_sink.clone()));
+    thread::spawn(|| async_chat_update(chat_system, rx));
+    thread::spawn(move || loop {
+        match mpsc::Sender::clone(&tx).send(ChatEvent::RecvMessage(
+            Message {
+                author: "bot".to_string(),
+                content: "Hi".to_string(),
+            },
+            Channel::Group("general".to_string()),
+        )) {
+            Ok(_) => {}
+            Err(e) => {
+                println!("{}", e);
+            }
+        };
+        thread::sleep(Duration::from_millis(500));
+    });
+    siv.focus_name("input").unwrap();
     siv.run();
 }
