@@ -46,9 +46,9 @@ pub enum ChatEvent {
 }
 
 pub trait Chat {
-    fn channels(&self) -> &Vec<String>;
-    fn friends(&self) -> &Vec<String>;
-    fn init_view(&mut self, channel: Channel) -> &Vec<Message>;
+    fn channels(&self) -> Vec<String>;
+    fn users(&self) -> Vec<String>;
+    fn init_view(&mut self, channel: Channel);
     fn send_message(&mut self, content: String);
     fn display_message(&self, message: Message, channel: &Channel);
     fn add_message(&mut self, message: Message, channel: Channel);

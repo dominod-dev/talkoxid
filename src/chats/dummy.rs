@@ -61,15 +61,15 @@ impl DummyChat {
 }
 
 impl Chat for DummyChat {
-    fn channels(&self) -> &Vec<String> {
-        &self.channels
+    fn channels(&self) -> Vec<String> {
+        self.channels.clone()
     }
 
-    fn friends(&self) -> &Vec<String> {
-        &self.friends
+    fn users(&self) -> Vec<String> {
+        self.friends.clone()
     }
 
-    fn init_view(&mut self, channel: Channel) -> &Vec<Message> {
+    fn init_view(&mut self, channel: Channel) {
         let index: usize;
         self.current_channel = channel;
         let messages = match &self.current_channel {
@@ -114,7 +114,6 @@ impl Chat for DummyChat {
                 });
             }))
             .unwrap();
-        return messages;
     }
 
     fn send_message(&mut self, content: String) {
