@@ -7,7 +7,7 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
-use oxychat::chats::DummyChat;
+use oxychat::chats::RocketChat;
 use oxychat::views::{BufferView, MessageBoxView};
 use oxychat::{Channel, Chat, ChatEvent, Message};
 
@@ -34,6 +34,7 @@ fn async_chat_update(mut chat_system: Box<dyn Chat>, rx: mpsc::Receiver<ChatEven
                 chat_system.init_view(channel);
             }
             Ok(ChatEvent::RecvMessage(message, channel)) => {
+                chat_system.init_view(Channel::Group("general".to_string()));
                 chat_system.add_message(message, channel);
             }
             Err(_) => continue,
@@ -107,7 +108,11 @@ fn main() {
         .child(chat_layout);
 
     siv.add_fullscreen_layer(global_layout);
-    let chat_system = Box::new(DummyChat::new(cb_sink.clone()));
+    let chat_system = Box::new(RocketChat::new(
+        "admin".to_string(),
+        "admin".to_string(),
+        cb_sink.clone(),
+    ));
     thread::spawn(|| async_chat_update(chat_system, rx));
     thread::spawn(move || loop {
         match mpsc::Sender::clone(&tx).send(ChatEvent::RecvMessage(
