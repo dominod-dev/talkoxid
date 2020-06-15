@@ -4,12 +4,13 @@ use cursive::view::{ScrollStrategy, SizeConstraint};
 use cursive::views::{Layer, LinearLayout, ResizedView, ScrollView, SelectView, TextView};
 use cursive::Cursive;
 use std::sync::mpsc;
-use std::thread;
-use std::time::Duration;
 
-use oxychat::chats::RocketChat;
+use std::sync::Arc;
+use std::sync::Mutex;
+
+use oxychat::chats::{ChatServer, RocketChat};
 use oxychat::views::{BufferView, MessageBoxView};
-use oxychat::{Channel, Chat, ChatEvent, Message};
+use oxychat::{Channel, ChatEvent};
 
 fn update_channel<'r>(tx: mpsc::Sender<ChatEvent>) -> impl Fn(&mut Cursive, &Channel) -> () {
     let closure = move |siv: &mut Cursive, item: &Channel| {
@@ -23,32 +24,16 @@ fn update_channel<'r>(tx: mpsc::Sender<ChatEvent>) -> impl Fn(&mut Cursive, &Cha
     return closure;
 }
 
-fn async_chat_update(mut chat_system: Box<dyn Chat>, rx: mpsc::Receiver<ChatEvent>) {
-    chat_system.init_view(Channel::Group("general".to_string()));
-    loop {
-        match rx.recv() {
-            Ok(ChatEvent::SendMessage(message)) => {
-                chat_system.send_message(message);
-            }
-            Ok(ChatEvent::Init(channel)) => {
-                chat_system.init_view(channel);
-            }
-            Ok(ChatEvent::RecvMessage(message, channel)) => {
-                chat_system.init_view(Channel::Group("general".to_string()));
-                chat_system.add_message(message, channel);
-            }
-            Err(_) => continue,
-        };
-    }
-}
-
 fn main() {
     let mut siv = cursive::default();
     let cb_sink = siv.cb_sink().clone();
-    let (tx, rx) = mpsc::channel();
+    let chat_system = RocketChat::new("admin".to_string(), "admin".to_string(), cb_sink.clone());
+    let chat_server = ChatServer {
+        chat_system: Arc::new(Mutex::new(chat_system)),
+    };
+    let tx = chat_server.start();
 
     siv.add_global_callback('q', |s| s.quit());
-    let tx1 = mpsc::Sender::clone(&tx);
 
     let white = ColorType::Color(Color::Rgb(255, 255, 255));
     let black = ColorType::Color(Color::Rgb(0, 0, 0));
@@ -70,7 +55,7 @@ fn main() {
         ResizedView::new(SizeConstraint::Full, SizeConstraint::Full, buffer),
         white_on_black,
     );
-    let message_input_box = MessageBoxView::new(tx1).with_name("input");
+    let message_input_box = MessageBoxView::new(mpsc::Sender::clone(&tx)).with_name("input");
     let message_input = ResizedView::new(
         SizeConstraint::Full,
         SizeConstraint::AtLeast(10),
@@ -108,27 +93,6 @@ fn main() {
         .child(chat_layout);
 
     siv.add_fullscreen_layer(global_layout);
-    let chat_system = Box::new(RocketChat::new(
-        "admin".to_string(),
-        "admin".to_string(),
-        cb_sink.clone(),
-    ));
-    thread::spawn(|| async_chat_update(chat_system, rx));
-    thread::spawn(move || loop {
-        match mpsc::Sender::clone(&tx).send(ChatEvent::RecvMessage(
-            Message {
-                author: "bot".to_string(),
-                content: "Hi".to_string(),
-            },
-            Channel::Group("general".to_string()),
-        )) {
-            Ok(_) => {}
-            Err(e) => {
-                println!("{}", e);
-            }
-        };
-        thread::sleep(Duration::from_millis(500));
-    });
     siv.focus_name("input").unwrap();
     siv.run();
 }
