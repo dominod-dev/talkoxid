@@ -11,6 +11,7 @@ use std::sync::Mutex;
 use oxychat::chats::{ChatServer, RocketChat};
 use oxychat::views::{BufferView, MessageBoxView};
 use oxychat::{Channel, ChatEvent};
+use url::Url;
 
 fn update_channel<'r>(tx: mpsc::Sender<ChatEvent>) -> impl Fn(&mut Cursive, &Channel) -> () {
     let closure = move |siv: &mut Cursive, item: &Channel| {
@@ -27,7 +28,12 @@ fn update_channel<'r>(tx: mpsc::Sender<ChatEvent>) -> impl Fn(&mut Cursive, &Cha
 fn main() {
     let mut siv = cursive::default();
     let cb_sink = siv.cb_sink().clone();
-    let chat_system = RocketChat::new("admin".to_string(), "admin".to_string(), cb_sink.clone());
+    let chat_system = RocketChat::new(
+        Url::parse("http://localhost:3000/").unwrap(),
+        "admin".to_string(),
+        "admin".to_string(),
+        cb_sink.clone(),
+    );
     let chat_server = ChatServer {
         chat_system: Arc::new(Mutex::new(chat_system)),
     };
