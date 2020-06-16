@@ -55,14 +55,14 @@ pub enum ChatEvent {
 }
 
 pub trait Chat {
-    fn init_view(&mut self, channel: Channel);
-    fn send_message(&self, content: String);
+    fn init_view(&mut self, channel: Channel) -> Result<(), String>;
+    fn send_message(&self, content: String) -> Result<(), String>;
     fn add_message(&self, message: Message, channel: Channel);
 }
 
 pub trait UI {
     fn update_messages(&self, content: String);
-    fn update_channels(&self, channels: Vec<(String, Channel)>);
+    fn update_channels(&self, channels: Vec<(String, Channel)>, current_channel: Option<Channel>);
     fn update_users(&self, users: Vec<(String, Channel)>);
     fn add_message(&self, message: Message);
 }
@@ -86,12 +86,20 @@ impl UI for CursiveUI {
             .unwrap();
     }
 
-    fn update_channels(&self, channels: Vec<(String, Channel)>) {
+    fn update_channels(&self, channels: Vec<(String, Channel)>, current_channel: Option<Channel>) {
+        let mut index = 0;
+        if let Some(channel) = current_channel {
+            index = channels
+                .iter()
+                .position(|x| x.1 == channel)
+                .unwrap_or_default();
+        }
         self.cb_sink
-            .send(Box::new(|siv: &mut Cursive| {
+            .send(Box::new(move |siv: &mut Cursive| {
                 siv.call_on_name("channel_list", move |view: &mut SelectView<Channel>| {
                     view.clear();
                     view.add_all(channels);
+                    view.set_selection(index)
                 });
             }))
             .unwrap();

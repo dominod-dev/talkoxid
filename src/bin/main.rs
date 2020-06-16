@@ -1,8 +1,6 @@
 use cursive::traits::*;
 use cursive::view::{ScrollStrategy, SizeConstraint};
-use cursive::views::{
-    EditView, Layer, LinearLayout, ResizedView, ScrollView, SelectView, TextView,
-};
+use cursive::views::{LinearLayout, ResizedView, ScrollView, SelectView, TextView};
 use cursive::Cursive;
 use std::sync::mpsc;
 
@@ -16,10 +14,6 @@ use url::Url;
 
 fn update_channel<'r>(tx: mpsc::Sender<ChatEvent>) -> impl Fn(&mut Cursive, &Channel) -> () {
     let closure = move |siv: &mut Cursive, item: &Channel| {
-        siv.call_on_name("channel_name", |view: &mut TextView| match item {
-            Channel::Group(_) => view.set_content(format!("#{}", item)),
-            Channel::User(_) => view.set_content(format!("{}", item)),
-        });
         tx.send(ChatEvent::Init(item.clone())).unwrap();
         siv.focus_name("input").unwrap();
     };
@@ -32,8 +26,8 @@ fn main() {
     let ui = Box::new(CursiveUI::new(cb_sink.clone()));
     let chat_system = RocketChat::new(
         Url::parse("http://localhost:3000/").unwrap(),
-        "admin".to_string(),
-        "admin".to_string(),
+        "collkid".to_string(),
+        "collkid".to_string(),
         ui,
     );
     let chat_server = ChatServer {
@@ -85,7 +79,6 @@ fn main() {
         SizeConstraint::Full,
         SizeConstraint::Full,
         LinearLayout::vertical()
-            .child(TextView::new("#general").with_name("channel_name"))
             .child(chat)
             .child(TextView::new("Message:"))
             .child(message_input),

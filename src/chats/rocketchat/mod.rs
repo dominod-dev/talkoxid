@@ -35,16 +35,12 @@ impl RocketChat {
 }
 
 impl Chat for RocketChat {
-    fn init_view(&mut self, channel: Channel) {
-        let channels = self.api.channels().unwrap();
-
-        let users = self.api.users().unwrap();
+    fn init_view(&mut self, channel: Channel) -> Result<(), String> {
+        let channels = self.api.channels()?;
+        let users = self.api.users()?;
         let channel_to_switch = channel.clone();
         self.current_channel = Some(channel);
-        let mut messages = self
-            .api
-            .history(format!("{}", channel_to_switch), 100)
-            .unwrap();
+        let mut messages = self.api.history(format!("{}", channel_to_switch), 100)?;
         messages.sort_by(|a, b| a.ts.partial_cmp(&b.ts).unwrap());
         let messages = messages.iter().fold(String::from(""), |x, y| {
             format!("{}[{}]: {}\n", x, y.u.username.clone(), y.msg)
@@ -55,6 +51,7 @@ impl Chat for RocketChat {
                 .iter()
                 .map(|x| (x.name.clone(), Channel::Group(x._id.clone())))
                 .collect::<Vec<(String, Channel)>>(),
+            self.current_channel.clone(),
         );
         self.ui.update_users(
             users
@@ -62,16 +59,17 @@ impl Chat for RocketChat {
                 .map(|x| (x.name.clone(), Channel::User(x.name.clone())))
                 .collect::<Vec<(String, Channel)>>(),
         );
+        Ok(())
     }
 
-    fn send_message(&self, content: String) {
+    fn send_message(&self, content: String) -> Result<(), String> {
         let channel_to_send = match &self.current_channel {
             Some(channel) => channel.clone(),
             None => Channel::Group("GENERAL".to_string()),
         };
         self.api
-            .send_message(format!("{}", channel_to_send), content)
-            .unwrap();
+            .send_message(format!("{}", channel_to_send), content)?;
+        Ok(())
     }
 
     fn add_message(&self, message: Message, channel: Channel) {
@@ -118,14 +116,20 @@ impl ChatServer {
                     ws.pong();
                 }
             });
-            chat_system.init_view(Channel::Group("GENERAL".to_string()));
+            chat_system
+                .init_view(Channel::Group("GENERAL".to_string()))
+                .unwrap_or_else(|err| println!("{}", err));
             loop {
                 match rx.recv() {
                     Ok(ChatEvent::SendMessage(message)) => {
-                        chat_system.send_message(message);
+                        chat_system
+                            .send_message(message)
+                            .unwrap_or_else(|err| println!("{}", err));
                     }
                     Ok(ChatEvent::Init(channel)) => {
-                        chat_system.init_view(channel);
+                        chat_system
+                            .init_view(channel)
+                            .unwrap_or_else(|err| println!("{}", err));
                     }
                     Ok(ChatEvent::RecvMessage(message, channel)) => {
                         chat_system.add_message(message, channel);
