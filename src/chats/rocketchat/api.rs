@@ -60,6 +60,23 @@ impl RocketChatApi {
         Ok(channels)
     }
 
+    pub fn rooms(&self) -> Result<Vec<RoomResponse>, String> {
+        let rooms = self
+            .client
+            .get(&format!("{}/api/v1/rooms.get", &self.host)[..])
+            .header(
+                "X-Auth-Token",
+                &self.auth_token.as_ref().unwrap().auth_token,
+            )
+            .header("X-User-Id", &self.auth_token.as_ref().unwrap().user_id)
+            .send()
+            .map_err(|err| format!("{:?}", err))?
+            .json::<RoomsListResponse>()
+            .map_err(|err| format!("{:?}", err))?
+            .update;
+        Ok(rooms)
+    }
+
     pub fn users(&self) -> Result<Vec<UserResponse>, String> {
         let users = self
             .client
@@ -77,7 +94,7 @@ impl RocketChatApi {
         Ok(users)
     }
     pub fn history(&self, room_id: String, count: usize) -> Result<Vec<MessageResponse>, String> {
-        let messages = self
+        let mut messages = self
             .client
             .get(
                 &format!(
@@ -91,7 +108,42 @@ impl RocketChatApi {
             )
             .header("X-User-Id", &self.auth_token.as_ref().unwrap().user_id)
             .send()
-            .map_err(|err| format!("{:?}", err))?
+            .map_err(|err| format!("{:?}", err))?;
+        if messages.status().as_u16() != 200 {
+            messages = self
+                .client
+                .get(
+                    &format!(
+                        "{}/api/v1/im.history?roomId={}&count={}",
+                        &self.host, room_id, count
+                    )[..],
+                )
+                .header(
+                    "X-Auth-Token",
+                    &self.auth_token.as_ref().unwrap().auth_token,
+                )
+                .header("X-User-Id", &self.auth_token.as_ref().unwrap().user_id)
+                .send()
+                .map_err(|err| format!("{:?}", err))?;
+        }
+        if messages.status().as_u16() != 200 {
+            messages = self
+                .client
+                .get(
+                    &format!(
+                        "{}/api/v1/groups.history?roomId={}&count={}",
+                        &self.host, room_id, count
+                    )[..],
+                )
+                .header(
+                    "X-Auth-Token",
+                    &self.auth_token.as_ref().unwrap().auth_token,
+                )
+                .header("X-User-Id", &self.auth_token.as_ref().unwrap().user_id)
+                .send()
+                .map_err(|err| format!("{:?}", err))?;
+        }
+        let messages = messages
             .json::<ChannelHistoryResponse>()
             .map_err(|err| format!("{:?}", err))?
             .messages;

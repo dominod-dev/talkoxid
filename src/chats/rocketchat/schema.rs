@@ -24,6 +24,18 @@ pub struct ChannelListResponse {
 }
 
 #[derive(Deserialize, Debug)]
+pub struct RoomResponse {
+    pub _id: String,
+    pub name: Option<String>,
+    pub usernames: Option<Vec<String>>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct RoomsListResponse {
+    pub update: Vec<RoomResponse>,
+}
+
+#[derive(Deserialize, Debug)]
 pub struct UserResponse {
     pub name: String,
 }

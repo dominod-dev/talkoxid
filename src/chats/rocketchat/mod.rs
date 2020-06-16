@@ -36,7 +36,8 @@ impl RocketChat {
 
 impl Chat for RocketChat {
     fn init_view(&mut self, channel: Channel) -> Result<(), String> {
-        let channels = self.api.channels()?;
+        let channels = self.api.rooms()?;
+        // let channels = self.api.channels()?;
         let users = self.api.users()?;
         let channel_to_switch = channel.clone();
         self.current_channel = Some(channel);
@@ -46,10 +47,23 @@ impl Chat for RocketChat {
             format!("{}[{}]: {}\n", x, y.u.username.clone(), y.msg)
         });
         self.ui.update_messages(messages);
+        // self.ui.update_channels(
+        //     channels
+        //         .iter()
+        //         .map(|x| (x.name.clone(), Channel::Group(x._id.clone())))
+        //         .collect::<Vec<(String, Channel)>>(),
+        //     self.current_channel.clone(),
+        // );
         self.ui.update_channels(
             channels
                 .iter()
-                .map(|x| (x.name.clone(), Channel::Group(x._id.clone())))
+                .map(|x| match (&x.name, &x.usernames) {
+                    (Some(name), _) => (name.clone(), Channel::Group(x._id.clone())),
+                    (None, Some(username)) => {
+                        (format!("{:?}", username), Channel::Group(x._id.clone()))
+                    }
+                    _ => (x._id.clone(), Channel::Group(x._id.clone())),
+                })
                 .collect::<Vec<(String, Channel)>>(),
             self.current_channel.clone(),
         );
