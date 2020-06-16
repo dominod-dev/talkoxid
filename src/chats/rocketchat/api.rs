@@ -1,5 +1,8 @@
 use super::schema::*;
 use reqwest::blocking::Client;
+use sha2::{Digest, Sha256};
+use tungstenite::client::AutoStream;
+use tungstenite::{connect, WebSocket};
 use url::Url;
 
 pub struct RocketChatApi {
@@ -22,7 +25,7 @@ impl RocketChatApi {
         }
     }
 
-    pub fn login(&mut self) -> Result<(), String> {
+    pub fn login(&mut self) -> Result<String, String> {
         let login_response = self
             .client
             .post(&format!("{}/api/v1/login", &self.host)[..])
@@ -35,8 +38,9 @@ impl RocketChatApi {
             .map_err(|err| format!("{:?}", err))?
             .json::<LoginResponse>()
             .map_err(|err| format!("{:?}", err))?;
+        let user_id = login_response.data.user_id.clone();
         self.auth_token = Some(login_response.data);
-        Ok(())
+        Ok(user_id)
     }
 
     pub fn channels(&self) -> Result<Vec<ChannelResponse>, String> {
@@ -110,5 +114,97 @@ impl RocketChatApi {
             .send()
             .map_err(|err| format!("{:?}", err))?;
         Ok(())
+    }
+}
+
+pub struct RocketChatWs {
+    socket: WebSocket<AutoStream>,
+    username: String,
+    password_digest: String,
+    user_id: String,
+}
+
+impl RocketChatWs {
+    pub fn new(mut host: Url, username: String, password: String, user_id: String) -> Self {
+        let mut hasher = Sha256::new();
+        hasher.update(password);
+        let password_digest = format!("{:x}", hasher.finalize());
+        host.set_scheme("ws").unwrap();
+        host.set_path("/websocket");
+        let (socket, _) = connect(host).expect("Can't connect");
+        RocketChatWs {
+            socket,
+            username,
+            password_digest,
+            user_id,
+        }
+    }
+
+    pub fn login(&mut self) {
+        let login = LoginWs {
+            msg: "method".into(),
+            method: "login".into(),
+            id: "42".into(),
+            params: vec![LoginParamsWs {
+                user: UsernameWs {
+                    username: self.username.clone(),
+                },
+                password: PasswordWs {
+                    digest: self.password_digest.clone(),
+                    algorithm: "sha-256".into(),
+                },
+            }],
+        };
+        let connect = ConnectWs {
+            msg: "connect".into(),
+            version: "1".into(),
+            support: vec!["1".into()],
+        };
+
+        self.socket
+            .write_message(tungstenite::Message::Text(
+                serde_json::to_string(&connect).unwrap(),
+            ))
+            .unwrap();
+        self.socket
+            .write_message(tungstenite::Message::Text(
+                serde_json::to_string(&login).unwrap(),
+            ))
+            .unwrap();
+    }
+
+    pub fn pong(&mut self) {
+        let pong = PongWs { msg: "pong".into() };
+        self.socket
+            .write_message(tungstenite::Message::Text(
+                serde_json::to_string(&pong).unwrap(),
+            ))
+            .unwrap();
+    }
+
+    pub fn subscribe_user(&mut self) {
+        let sub = SubStreamChannelWs {
+            msg: "sub".into(),
+            id: "1234".into(),
+            name: "stream-notify-user".into(),
+            params: vec![
+                serde_json::json!(format!("{}/rooms-changed", &self.user_id)),
+                serde_json::json!(false),
+            ],
+        };
+
+        self.socket
+            .write_message(tungstenite::Message::Text(
+                serde_json::to_string(&sub).unwrap(),
+            ))
+            .unwrap();
+    }
+
+    pub fn read(&mut self) -> Result<String, String> {
+        Ok(self
+            .socket
+            .read_message()
+            .map_err(|err| format!("{:?}", err))?
+            .to_string())
     }
 }

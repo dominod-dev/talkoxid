@@ -1,7 +1,7 @@
 # Every field in a theme file is optional.
 
 shadow = false
-borders = "outset" # Alternatives are "none" and "simple"
+borders = "none" # Alternatives are "none" and "simple"
 
 # Base colors are red, green, blue,
 # cyan, magenta, yellow, white and black.
@@ -21,7 +21,8 @@ borders = "outset" # Alternatives are "none" and "simple"
 	# If the terminal doesn't support custom color (like the linux TTY),
 	# non-base colors will be skipped.
 	shadow     = ["#222288", "blue"]
-	view       = "111"
+	# view       = "111"
+    view       = "black"
 
 	# An array with a single value has the same effect as a simple value.
 	primary   = "white"

@@ -1,90 +1,67 @@
 pub mod api;
 pub mod schema;
-use super::super::views::BufferView;
+use super::super::UI;
 use super::super::{Channel, Chat, ChatEvent, Message};
-use api::RocketChatApi;
-use cursive::views::SelectView;
-use cursive::CbSink;
-use cursive::Cursive;
+use api::{RocketChatApi, RocketChatWs};
 use schema::*;
-use sha2::{Digest, Sha256};
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
-use tungstenite;
-use tungstenite::connect;
 use url::Url;
 
 pub struct RocketChat {
     api: RocketChatApi,
-    cb_sink: CbSink,
+    pub ws: Arc<Mutex<RocketChatWs>>,
     pub current_channel: Option<Channel>,
+    ui: Box<dyn UI + Send>,
 }
 
 impl RocketChat {
-    pub fn new(host: Url, username: String, password: String, cb_sink: CbSink) -> Self {
-        let mut api = RocketChatApi::new(host, username, password);
-        api.login().unwrap();
+    pub fn new(host: Url, username: String, password: String, ui: Box<dyn UI + Send>) -> Self {
+        let mut api = RocketChatApi::new(host.clone(), username.clone(), password.clone());
+        let user_id = api.login().unwrap();
+        let ws = Arc::new(Mutex::new(RocketChatWs::new(
+            host, username, password, user_id,
+        )));
+        ws.lock().unwrap().login();
         RocketChat {
             api,
-            cb_sink,
+            ws,
             current_channel: None,
+            ui,
         }
     }
 }
 
 impl Chat for RocketChat {
-    fn channels(&self) -> Vec<String> {
-        vec![]
-    }
-
-    fn users(&self) -> Vec<String> {
-        vec![]
-    }
-
     fn init_view(&mut self, channel: Channel) {
         let channels = self.api.channels().unwrap();
 
         let users = self.api.users().unwrap();
-        let channeltmp = match channel.clone() {
-            Channel::Group(e) if e == String::from("SWITCH") => {
-                self.current_channel.clone().unwrap()
-            }
-            _ => {
-                let return_channel = channel.clone();
-                self.current_channel = Some(channel);
-                return_channel
-            }
-        };
-        let mut messages = self.api.history(format!("{}", channeltmp), 100).unwrap();
+        let channel_to_switch = channel.clone();
+        self.current_channel = Some(channel);
+        let mut messages = self
+            .api
+            .history(format!("{}", channel_to_switch), 100)
+            .unwrap();
         messages.sort_by(|a, b| a.ts.partial_cmp(&b.ts).unwrap());
         let messages = messages.iter().fold(String::from(""), |x, y| {
             format!("{}[{}]: {}\n", x, y.u.username.clone(), y.msg)
         });
-        self.cb_sink
-            .send(Box::new(move |siv: &mut Cursive| {
-                siv.call_on_name("chat", move |view: &mut BufferView| view.init(messages));
-                siv.call_on_name("channel_list", move |view: &mut SelectView<Channel>| {
-                    view.clear();
-                    view.add_all(
-                        channels
-                            .iter()
-                            .map(|x| (&x.name[..], Channel::Group(x._id.clone())))
-                            .collect::<Vec<(&str, Channel)>>(),
-                    );
-                });
-                siv.call_on_name("users_list", move |view: &mut SelectView<Channel>| {
-                    view.clear();
-                    view.add_all(
-                        users
-                            .iter()
-                            .map(|x| (&x.name[..], Channel::User(x.name.clone())))
-                            .collect::<Vec<(&str, Channel)>>(),
-                    );
-                });
-            }))
-            .unwrap();
+        self.ui.update_messages(messages);
+        self.ui.update_channels(
+            channels
+                .iter()
+                .map(|x| (x.name.clone(), Channel::Group(x._id.clone())))
+                .collect::<Vec<(String, Channel)>>(),
+        );
+        self.ui.update_users(
+            users
+                .iter()
+                .map(|x| (x.name.clone(), Channel::User(x.name.clone())))
+                .collect::<Vec<(String, Channel)>>(),
+        );
     }
 
     fn send_message(&self, content: String) {
@@ -97,28 +74,17 @@ impl Chat for RocketChat {
             .unwrap();
     }
 
-    fn display_message(&self, message: Message) {
-        if let Some(_) = &self.current_channel {
-            self.cb_sink
-                .send(Box::new(|siv: &mut Cursive| {
-                    siv.call_on_name("chat", move |view: &mut BufferView| {
-                        view.add_message(format!("[{}]: {}\n", message.author, message.content))
-                    });
-                }))
-                .unwrap();
-        }
-    }
     fn add_message(&self, message: Message, channel: Channel) {
         if let Some(current_channel) = &self.current_channel {
             if &channel == current_channel {
-                self.display_message(message);
+                self.ui.add_message(message);
             }
         }
     }
 }
 
 pub struct ChatServer {
-    pub chat_system: Arc<Mutex<dyn Chat + Send>>,
+    pub chat_system: Arc<Mutex<RocketChat>>,
 }
 
 impl ChatServer {
@@ -128,6 +94,30 @@ impl ChatServer {
         let tx2 = mpsc::Sender::clone(&tx);
         thread::spawn(move || {
             let mut chat_system = chat_system.lock().unwrap();
+            let ws = Arc::clone(&chat_system.ws);
+            thread::spawn(move || {
+                let mut ws = ws.lock().unwrap();
+                ws.subscribe_user();
+                loop {
+                    let msg = ws.read().unwrap();
+                    if let Ok(ms) = serde_json::from_str::<SocketMessageWs>(&format!("{}", msg)[..])
+                    {
+                        match tx2.send(ChatEvent::RecvMessage(
+                            Message {
+                                author: ms.fields.args.1.last_message.u.username.clone(),
+                                content: ms.fields.args.1.last_message.msg.clone(),
+                            },
+                            Channel::Group(ms.fields.args.1.last_message.rid.clone()),
+                        )) {
+                            Ok(_) => {}
+                            Err(e) => {
+                                println!("{}", e);
+                            }
+                        };
+                    };
+                    ws.pong();
+                }
+            });
             chat_system.init_view(Channel::Group("GENERAL".to_string()));
             loop {
                 match rx.recv() {
@@ -138,88 +128,10 @@ impl ChatServer {
                         chat_system.init_view(channel);
                     }
                     Ok(ChatEvent::RecvMessage(message, channel)) => {
-                        // chat_system.init_view(Channel::Group("SWITCH".to_string()));
                         chat_system.add_message(message, channel);
                     }
                     Err(_) => continue,
                 };
-            }
-        });
-
-        thread::spawn(move || {
-            let username = "admin";
-            let password = "admin";
-            let mut hasher = Sha256::new();
-            hasher.update(password);
-            let password_digest = format!("{:x}", hasher.finalize());
-
-            let (mut socket, _) = connect(Url::parse("ws://localhost:3000/websocket").unwrap())
-                .expect("Can't connect");
-            let login = LoginWs {
-                msg: "method".into(),
-                method: "login".into(),
-                id: "42".into(),
-                params: vec![LoginParamsWs {
-                    user: UsernameWs {
-                        username: username.into(),
-                    },
-                    password: PasswordWs {
-                        digest: password_digest,
-                        algorithm: "sha-256".into(),
-                    },
-                }],
-            };
-            let connect = ConnectWs {
-                msg: "connect".into(),
-                version: "1".into(),
-                support: vec!["1".into()],
-            };
-            let sub = SubStreamChannelWs {
-                msg: "sub".into(),
-                id: "1234".into(),
-                name: "stream-notify-user".into(),
-                params: vec![
-                    serde_json::json!("wqJNPhCkTEnGpKtL3/rooms-changed"),
-                    serde_json::json!(false),
-                ],
-            };
-            let pong = PongWs { msg: "pong".into() };
-            socket
-                .write_message(tungstenite::Message::Text(
-                    serde_json::to_string(&connect).unwrap(),
-                ))
-                .unwrap();
-            socket
-                .write_message(tungstenite::Message::Text(
-                    serde_json::to_string(&login).unwrap(),
-                ))
-                .unwrap();
-            socket
-                .write_message(tungstenite::Message::Text(
-                    serde_json::to_string(&sub).unwrap(),
-                ))
-                .unwrap();
-            loop {
-                let msg = socket.read_message().expect("Error reading message");
-                if let Ok(ms) = serde_json::from_str::<SocketMessageWs>(&format!("{}", msg)[..]) {
-                    match tx2.send(ChatEvent::RecvMessage(
-                        Message {
-                            author: ms.fields.args.1.last_message.u.username.clone(),
-                            content: ms.fields.args.1.last_message.msg.clone(),
-                        },
-                        Channel::Group(ms.fields.args.1.last_message.rid.clone()),
-                    )) {
-                        Ok(_) => {}
-                        Err(e) => {
-                            println!("{}", e);
-                        }
-                    };
-                };
-                socket
-                    .write_message(tungstenite::Message::Text(
-                        serde_json::to_string(&pong).unwrap(),
-                    ))
-                    .unwrap();
             }
         });
         tx
