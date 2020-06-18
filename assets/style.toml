@@ -1,7 +1,7 @@
 # Every field in a theme file is optional.
 
 shadow = false
-borders = "none" # Alternatives are "none" and "simple"
+borders = "simple" # Alternatives are "none" and "simple"
 
 # Base colors are red, green, blue,
 # cyan, magenta, yellow, white and black.
@@ -31,7 +31,7 @@ borders = "none" # Alternatives are "none" and "simple"
 
 	# Hex values can use lower or uppercase.
 	# (base color MUST be lowercase)
-	title_primary   = ["BLUE", "yellow"] # `BLUE` will be skipped.
+	title_primary   = "yellow"
 	title_secondary = "#ffff55"
 
 	# Lower precision values can use only 3 digits.
