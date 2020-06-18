@@ -12,8 +12,7 @@ use tokio_tungstenite::tungstenite;
 use url::Url;
 
 pub struct RocketChat {
-    pub api: RocketChatApi,
-    pub current_channel: Option<Channel>,
+    api: RocketChatApi,
     ui: Box<dyn UI + Send + Sync>,
     ws: api::RocketChatWsWriter,
     ws_reader: Receiver<tungstenite::Message>,
@@ -57,7 +56,6 @@ impl RocketChat {
         .await;
         RocketChat {
             api,
-            current_channel: None,
             ui,
             ws,
             ws_reader,
@@ -107,18 +105,13 @@ impl Chat for RocketChat {
     }
 
     async fn send_message(&self, content: String, channel: Channel) -> Result<(), String> {
-        // self.api
-        //     .send_message(format!("{}", channel_to_send), content)
-        //     .await?;
         self.ws.send_message(format!("{}", channel), content).await;
         Ok(())
     }
     async fn wait_for_messages(&self) -> Result<(), String> {
         loop {
             let msg = self.ws_reader.recv().await.unwrap();
-            info!("{:?}", msg);
             if let Ok(ms) = serde_json::from_str::<SocketMessageWs>(&format!("{}", msg)[..]) {
-                info!("You've got a message : {:?}", ms);
                 &self
                     .ui_tx
                     .send(ChatEvent::RecvMessage(
@@ -158,63 +151,3 @@ impl Chat for RocketChat {
         self.ui.add_message(message);
     }
 }
-
-pub struct ChatServer {
-    pub chat_system: RocketChat,
-}
-
-// impl ChatServer {
-//     pub async fn start(&self, rx: tokio::sync::mpsc::Receiver<ChatEvent>){
-//         // let chat_system = Arc::clone(&self.chat_system);
-//         // let (tx, rx) = mpsc::channel();
-//         // let rx = Arc::new(Mutex::new(rx));
-//         // let rx = Arc::clone(&rx);
-//         // let tx2 = mpsc::Sender::clone(&tx);
-//         // let mut chat_system = chat_system.lock().unwrap();
-//         // let ws = Arc::clone(&chat_system.ws);
-//         // thread::spawn(move || {
-//         //     let mut ws = ws.lock().unwrap();
-//         //     ws.subscribe_user();
-//         //     loop {
-//         //         let msg = ws.read().unwrap();
-//         //         if let Ok(ms) = serde_json::from_str::<SocketMessageWs>(&format!("{}", msg)[..])
-//         //         {
-//         //             match tx2.send(ChatEvent::RecvMessage(
-//         //                 Message {
-//         //                     author: ms.fields.args.1.last_message.u.username.clone(),
-//         //                     content: ms.fields.args.1.last_message.msg.clone(),
-//         //                 },
-//         //                 Channel::Group(ms.fields.args.1.last_message.rid.clone()),
-//         //             )) {
-//         //                 Ok(_) => {}
-//         //                 Err(e) => {
-//         //                     println!("{}", e);
-//         //                 }
-//         //             };
-//         //         };
-//         //         ws.pong();
-//         //     }
-//         // });
-//         self.chat_system
-//             .init_view(Channel::Group("GENERAL".to_string())).await.unwrap()
-//             ;
-//         tokio::spawn(async {loop {
-//             match rx.recv().await.unwrap() {
-//                 ChatEvent::SendMessage(message) => {
-//                     self.chat_system
-//                         .send_message(message).await.unwrap()
-//                         ;
-//                 }
-//                 ChatEvent::Init(channel) => {
-//                     self.chat_system
-//                         .init_view(channel).await.unwrap()
-//                         ;
-//                 }
-//                 ChatEvent::RecvMessage(message, channel) => {
-//                     self.chat_system.add_message(message, channel);
-//                 }
-//             };
-//         }});
-//         // tx
-//     }
-// }

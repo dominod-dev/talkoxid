@@ -49,7 +49,7 @@ async fn chat_loop(
     };
 }
 
-fn on_channel_changed<'r>(
+fn on_channel_changed(
     tx: async_channel::Sender<ChatEvent>,
     rt: tokio::runtime::Handle,
 ) -> impl Fn(&mut Cursive, &Channel) -> () {
