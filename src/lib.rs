@@ -1,10 +1,12 @@
 pub mod chats;
 pub mod views;
-use cursive::views::SelectView;
+use async_trait::async_trait;
+use cursive::view::ScrollStrategy;
+use cursive::views::{NamedView, ResizedView, ScrollView, SelectView};
 use cursive::{CbSink, Cursive};
 use std::fmt;
 use std::hash::{Hash, Hasher};
-use views::BufferView;
+use views::{BufferView, MessageBoxView};
 
 #[derive(Clone)]
 pub struct Message {
@@ -49,15 +51,18 @@ impl Hash for Channel {
 }
 
 pub enum ChatEvent {
-    SendMessage(String),
+    SendMessage(String, Channel),
     RecvMessage(Message, Channel),
     Init(Channel),
 }
 
+#[async_trait]
 pub trait Chat {
-    fn init_view(&mut self, channel: Channel) -> Result<(), String>;
-    fn send_message(&self, content: String) -> Result<(), String>;
-    fn add_message(&self, message: Message, channel: Channel);
+    async fn init_view(&self, channel: Channel) -> Result<(), String>;
+    async fn send_message(&self, content: String, channel: Channel) -> Result<(), String>;
+    async fn add_message(&self, message: Message, channel: Channel);
+    async fn wait_for_messages(&self) -> Result<(), String>;
+    async fn update_ui(&self) -> Result<(), String>;
 }
 
 pub trait UI {
@@ -65,6 +70,7 @@ pub trait UI {
     fn update_channels(&self, channels: Vec<(String, Channel)>, current_channel: Option<Channel>);
     fn update_users(&self, users: Vec<(String, Channel)>);
     fn add_message(&self, message: Message);
+    fn select_channel(&self, channel: Channel);
 }
 
 pub struct CursiveUI {
@@ -121,6 +127,23 @@ impl UI for CursiveUI {
             .send(Box::new(|siv: &mut Cursive| {
                 siv.call_on_name("chat", move |view: &mut BufferView| {
                     view.add_message(format!("{}\n", message))
+                });
+                siv.call_on_name(
+                    "scroll",
+                    move |view: &mut ScrollView<ResizedView<NamedView<BufferView>>>| {
+                        view.scroll_to_bottom();
+                        view.set_scroll_strategy(ScrollStrategy::StickToBottom);
+                    },
+                );
+            }))
+            .unwrap();
+    }
+
+    fn select_channel(&self, channel: Channel) {
+        self.cb_sink
+            .send(Box::new(|siv: &mut Cursive| {
+                siv.call_on_name("input", move |view: &mut MessageBoxView| {
+                    view.channel = Some(channel);
                 });
             }))
             .unwrap();

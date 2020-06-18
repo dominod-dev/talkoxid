@@ -1,8 +1,9 @@
 use super::schema::*;
-use reqwest::blocking::Client;
+use async_channel::{Receiver, Sender};
+use log::info;
+use reqwest::Client;
 use sha2::{Digest, Sha256};
-use tungstenite::client::AutoStream;
-use tungstenite::{connect, WebSocket};
+use tokio_tungstenite::tungstenite;
 use url::Url;
 
 pub struct RocketChatApi {
@@ -25,7 +26,7 @@ impl RocketChatApi {
         }
     }
 
-    pub fn login(&mut self) -> Result<String, String> {
+    pub async fn login(&mut self) -> Result<String, String> {
         let login_response = self
             .client
             .post(&format!("{}/api/v1/login", &self.host)[..])
@@ -35,15 +36,17 @@ impl RocketChatApi {
             ))
             .header("content-type", "application/x-www-form-urlencoded")
             .send()
+            .await
             .map_err(|err| format!("{:?}", err))?
             .json::<LoginResponse>()
+            .await
             .map_err(|err| format!("{:?}", err))?;
         let user_id = login_response.data.user_id.clone();
         self.auth_token = Some(login_response.data);
         Ok(user_id)
     }
 
-    pub fn channels(&self) -> Result<Vec<ChannelResponse>, String> {
+    pub async fn channels(&self) -> Result<Vec<ChannelResponse>, String> {
         let channels = self
             .client
             .get(&format!("{}/api/v1/channels.list", &self.host)[..])
@@ -53,14 +56,16 @@ impl RocketChatApi {
             )
             .header("X-User-Id", &self.auth_token.as_ref().unwrap().user_id)
             .send()
+            .await
             .map_err(|err| format!("{:?}", err))?
             .json::<ChannelListResponse>()
+            .await
             .map_err(|err| format!("{:?}", err))?
             .channels;
         Ok(channels)
     }
 
-    pub fn rooms(&self) -> Result<Vec<RoomResponse>, String> {
+    pub async fn rooms(&self) -> Result<Vec<RoomResponse>, String> {
         let rooms = self
             .client
             .get(&format!("{}/api/v1/rooms.get", &self.host)[..])
@@ -70,14 +75,16 @@ impl RocketChatApi {
             )
             .header("X-User-Id", &self.auth_token.as_ref().unwrap().user_id)
             .send()
+            .await
             .map_err(|err| format!("{:?}", err))?
             .json::<RoomsListResponse>()
+            .await
             .map_err(|err| format!("{:?}", err))?
             .update;
         Ok(rooms)
     }
 
-    pub fn users(&self) -> Result<Vec<UserResponse>, String> {
+    pub async fn users(&self) -> Result<Vec<UserResponse>, String> {
         let users = self
             .client
             .get(&format!("{}/api/v1/users.list", &self.host)[..])
@@ -87,13 +94,19 @@ impl RocketChatApi {
             )
             .header("X-User-Id", &self.auth_token.as_ref().unwrap().user_id)
             .send()
+            .await
             .map_err(|err| format!("{:?}", err))?
             .json::<UserListResponse>()
+            .await
             .map_err(|err| format!("{:?}", err))?
             .users;
         Ok(users)
     }
-    pub fn history(&self, room_id: String, count: usize) -> Result<Vec<MessageResponse>, String> {
+    pub async fn history(
+        &self,
+        room_id: String,
+        count: usize,
+    ) -> Result<Vec<MessageResponse>, String> {
         let mut messages = self
             .client
             .get(
@@ -108,6 +121,7 @@ impl RocketChatApi {
             )
             .header("X-User-Id", &self.auth_token.as_ref().unwrap().user_id)
             .send()
+            .await
             .map_err(|err| format!("{:?}", err))?;
         if messages.status().as_u16() != 200 {
             messages = self
@@ -124,6 +138,7 @@ impl RocketChatApi {
                 )
                 .header("X-User-Id", &self.auth_token.as_ref().unwrap().user_id)
                 .send()
+                .await
                 .map_err(|err| format!("{:?}", err))?;
         }
         if messages.status().as_u16() != 200 {
@@ -141,16 +156,18 @@ impl RocketChatApi {
                 )
                 .header("X-User-Id", &self.auth_token.as_ref().unwrap().user_id)
                 .send()
+                .await
                 .map_err(|err| format!("{:?}", err))?;
         }
         let messages = messages
             .json::<ChannelHistoryResponse>()
+            .await
             .map_err(|err| format!("{:?}", err))?
             .messages;
         Ok(messages)
     }
 
-    pub fn send_message(&self, room_id: String, content: String) -> Result<(), String> {
+    pub async fn send_message(&self, room_id: String, content: String) -> Result<(), String> {
         self.client
             .post(&format!("{}/api/v1/chat.postMessage", &self.host)[..])
             .body(format!(
@@ -164,35 +181,74 @@ impl RocketChatApi {
             .header("X-User-Id", &self.auth_token.as_ref().unwrap().user_id)
             .header("content-type", "application/json")
             .send()
+            .await
             .map_err(|err| format!("{:?}", err))?;
         Ok(())
     }
 }
 
-pub struct RocketChatWs {
-    socket: WebSocket<AutoStream>,
+pub struct RocketChatWsWriter {
     username: String,
     password_digest: String,
     user_id: String,
+    websocket: Sender<tokio_tungstenite::tungstenite::Message>,
 }
 
-impl RocketChatWs {
-    pub fn new(mut host: Url, username: String, password: String, user_id: String) -> Self {
+impl RocketChatWsWriter {
+    pub async fn new(
+        username: String,
+        password: String,
+        websocket: Sender<tungstenite::Message>,
+        reader: &Receiver<tungstenite::Message>,
+    ) -> Self {
         let mut hasher = Sha256::new();
         hasher.update(password);
         let password_digest = format!("{:x}", hasher.finalize());
-        host.set_scheme("ws").unwrap();
-        host.set_path("/websocket");
-        let (socket, _) = connect(host).expect("Can't connect");
-        RocketChatWs {
-            socket,
+        info!("{:?}", reader.recv().await.unwrap());
+        RocketChatWsWriter::connect(&websocket).await;
+        info!("{:?}", reader.recv().await.unwrap());
+        RocketChatWsWriter::init(&username, &password_digest, &websocket).await;
+        let msg = reader.recv().await.unwrap();
+        info!("{:?}", msg);
+        let user_id = serde_json::from_str::<UserIdResponse>(&msg.to_string()[..])
+            .unwrap()
+            .id;
+        RocketChatWsWriter {
             username,
             password_digest,
             user_id,
+            websocket,
         }
     }
 
-    pub fn login(&mut self) {
+    pub async fn init(
+        username: &str,
+        password_digest: &str,
+        websocket: &Sender<tungstenite::Message>,
+    ) {
+        let login = LoginWs {
+            msg: "method".into(),
+            method: "login".into(),
+            id: "42".into(),
+            params: vec![LoginParamsWs {
+                user: UsernameWs {
+                    username: username.into(),
+                },
+                password: PasswordWs {
+                    digest: password_digest.into(),
+                    algorithm: "sha-256".into(),
+                },
+            }],
+        };
+        websocket
+            .send(tungstenite::Message::Text(
+                serde_json::to_string(&login).unwrap(),
+            ))
+            .await
+            .unwrap();
+    }
+
+    pub async fn login(&self) {
         let login = LoginWs {
             msg: "method".into(),
             method: "login".into(),
@@ -207,34 +263,39 @@ impl RocketChatWs {
                 },
             }],
         };
+        self.websocket
+            .send(tungstenite::Message::Text(
+                serde_json::to_string(&login).unwrap(),
+            ))
+            .await
+            .unwrap();
+    }
+
+    pub async fn connect(writer: &Sender<tungstenite::Message>) {
         let connect = ConnectWs {
             msg: "connect".into(),
             version: "1".into(),
             support: vec!["1".into()],
         };
-
-        self.socket
-            .write_message(tungstenite::Message::Text(
+        writer
+            .send(tungstenite::Message::Text(
                 serde_json::to_string(&connect).unwrap(),
             ))
-            .unwrap();
-        self.socket
-            .write_message(tungstenite::Message::Text(
-                serde_json::to_string(&login).unwrap(),
-            ))
+            .await
             .unwrap();
     }
 
-    pub fn pong(&mut self) {
+    pub async fn pong(&self) {
         let pong = PongWs { msg: "pong".into() };
-        self.socket
-            .write_message(tungstenite::Message::Text(
+        self.websocket
+            .send(tungstenite::Message::Text(
                 serde_json::to_string(&pong).unwrap(),
             ))
+            .await
             .unwrap();
     }
 
-    pub fn subscribe_user(&mut self) {
+    pub async fn subscribe_user(&self) {
         let sub = SubStreamChannelWs {
             msg: "sub".into(),
             id: "1234".into(),
@@ -244,19 +305,34 @@ impl RocketChatWs {
                 serde_json::json!(false),
             ],
         };
-
-        self.socket
-            .write_message(tungstenite::Message::Text(
+        self.websocket
+            .send(tungstenite::Message::Text(
                 serde_json::to_string(&sub).unwrap(),
             ))
+            .await
             .unwrap();
     }
 
-    pub fn read(&mut self) -> Result<String, String> {
-        Ok(self
-            .socket
-            .read_message()
-            .map_err(|err| format!("{:?}", err))?
-            .to_string())
+    pub async fn send_message(&self, room_id: String, content: String) {
+        let msg = format!(
+            r#"
+            {{
+                "msg": "method",
+                "method": "sendMessage",
+                "id": "42",
+                "params": [
+                    {{
+                        "rid": "{}",
+                        "msg": "{}"
+                    }}
+                ]
+            }}
+        "#,
+            room_id, content
+        );
+        self.websocket
+            .send(tungstenite::Message::Text(msg))
+            .await
+            .unwrap();
     }
 }

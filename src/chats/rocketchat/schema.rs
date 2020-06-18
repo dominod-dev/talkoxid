@@ -132,3 +132,8 @@ pub struct SocketMessageWs {
     pub msg: String,
     pub fields: SocketArgsWs,
 }
+
+#[derive(Deserialize, Debug)]
+pub struct UserIdResponse {
+    pub id: String,
+}
