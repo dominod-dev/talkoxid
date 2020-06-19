@@ -71,15 +71,7 @@ impl Chat for RocketChat {
         let channels = self.api.rooms().await?;
         let users = self.api.users().await?;
         let channel_to_switch = channel.clone();
-        let mut messages = self
-            .api
-            .history(format!("{}", channel_to_switch), 100)
-            .await?;
-        messages.sort_by(|a, b| a.ts.partial_cmp(&b.ts).unwrap());
-        let messages = messages.iter().fold(String::from(""), |x, y| {
-            format!("{}[{}]: {}\n", x, y.u.username.clone(), y.msg)
-        });
-        self.ui.update_messages(messages);
+        self.ws.load_history(format!("{}", channel_to_switch), 100).await;
         self.ui.update_channels(
             channels
                 .iter()
@@ -111,20 +103,33 @@ impl Chat for RocketChat {
     async fn wait_for_messages(&self) -> Result<(), String> {
         loop {
             let msg = self.ws_reader.recv().await.unwrap();
-            if let Ok(ms) = serde_json::from_str::<SocketMessageWs>(&format!("{}", msg)[..]) {
-                &self
-                    .ui_tx
-                    .send(ChatEvent::RecvMessage(
-                        Message {
-                            author: ms.fields.args.1.last_message.u.username.clone(),
-                            content: ms.fields.args.1.last_message.msg.clone(),
-                        },
-                        Channel::Group(ms.fields.args.1.last_message.rid.clone()),
-                    ))
-                    .await
-                    .unwrap_or_else(|err| info!("{:?}", err));
+            if let Ok(resp) = serde_json::from_str::<WsResponse>(&format!("{}", msg)[..]) {
+                match resp {
+                    WsResponse::NewMessage(ms) => {
+                        &self
+                        .ui_tx
+                        .send(ChatEvent::RecvMessage(
+                            Message {
+                                author: ms.fields.args.1.last_message.u.username.clone(),
+                                content: ms.fields.args.1.last_message.msg.clone(),
+                            },
+                            Channel::Group(ms.fields.args.1.last_message.rid.clone()),
+                        ))
+                        .await
+                        .unwrap_or_else(|err| info!("{:?}", err));
+                    },
+                    WsResponse::History {result, ..} => {
+                        let messages = result.messages.iter().rev().fold(String::from(""), |x, y| {
+                            format!("{}[{}]: {}\n", x, y.u.username.clone(), y.msg)
+                        });
+                        self.ui.update_messages(messages);
+                    },
+                    WsResponse::Ping {msg} if msg == "ping" => {
+                        self.ponger.send(r#"{"msg": "pong"}"#.into()).await.unwrap();
+                    },
+                    _ => {}
+                }
             }
-            self.ponger.send(r#"{"msg": "pong"}"#.into()).await.unwrap();
         }
     }
 
