@@ -100,6 +100,20 @@ pub struct PongWs {
 }
 
 #[derive(Serialize, Debug)]
+pub enum LoadChannelHistoryParams {
+    RoomId(String),
+    Count(usize),
+    None,
+}
+
+pub struct LoadChannelHistory {
+    pub msg: String,
+    pub method: String,
+    pub id: String,
+    pub params: Vec<LoadChannelHistoryParams>,
+}
+
+#[derive(Serialize, Debug)]
 pub struct SubStreamChannelWs {
     pub msg: String,
     pub id: String,
@@ -112,6 +126,11 @@ pub struct MessageResponseWs {
     pub u: AuthorResponse,
     pub rid: String,
     pub msg: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct ChannelHistoryResponseWs {
+    pub messages: Vec<MessageResponseWs>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -136,4 +155,18 @@ pub struct SocketMessageWs {
 #[derive(Deserialize, Debug)]
 pub struct UserIdResponse {
     pub id: String,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(untagged)]
+pub enum WsResponse {
+    NewMessage(SocketMessageWs),
+    History {
+        msg: String,
+        id: String,
+        result: ChannelHistoryResponseWs,
+    },
+    Ping {
+        msg: String,
+    },
 }
