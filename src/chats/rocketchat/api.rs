@@ -335,4 +335,22 @@ impl RocketChatWsWriter {
             .await
             .unwrap();
     }
+
+    pub async fn load_history(&self, room_id: String, count: usize) {
+        let msg = format!(
+            r#"
+            {{
+                "msg": "method",
+                "method": "loadHistory",
+                "id": "42",
+                "params": [ "{}", null, {}, null ]
+            }}
+        "#,
+            room_id, count
+        );
+        self.websocket
+            .send(tungstenite::Message::Text(msg))
+            .await
+            .unwrap();
+    }
 }
