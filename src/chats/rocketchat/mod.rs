@@ -8,6 +8,7 @@ use async_channel::{Receiver, Sender};
 use futures_util::StreamExt;
 use log::info;
 use schema::*;
+use std::error::Error;
 use tokio_tungstenite::tungstenite;
 use url::Url;
 
@@ -29,11 +30,13 @@ impl RocketChat {
         ui: Box<dyn UI + Send + Sync>,
         ui_tx: Sender<ChatEvent>,
         ui_rx: Receiver<ChatEvent>,
-    ) -> Self {
+    ) -> Result<Self, Box<dyn Error>> {
         let mut ws_host = host.clone();
-        ws_host.set_scheme("ws").unwrap();
+        ws_host
+            .set_scheme("ws")
+            .map_err(|err| format!("{:?}", err))?;
         ws_host.set_path("/websocket");
-        let (socket, _) = tokio_tungstenite::connect_async(ws_host).await.unwrap();
+        let (socket, _) = tokio_tungstenite::connect_async(ws_host).await?;
         let (ws_writer, rxws) = async_channel::unbounded();
         let ponger = ws_writer.clone();
         let (txws, ws_reader) = async_channel::unbounded();
@@ -41,18 +44,18 @@ impl RocketChat {
         tokio::spawn(rxws.map(Ok).forward(write));
         tokio::spawn(async move {
             loop {
-                let msg = read.next().await.unwrap().unwrap();
-                txws.send(msg).await.unwrap();
+                let msg = read
+                    .next()
+                    .await
+                    .unwrap_or_else(|| panic!("Reading message returned None"))
+                    .unwrap_or_else(|err| panic!("{:?}", err));
+                txws.send(msg)
+                    .await
+                    .unwrap_or_else(|err| panic!("{:?}", err));
             }
         });
-        let ws = RocketChatWsWriter::new(
-            username.clone(),
-            password,
-            ws_writer,
-            &ws_reader,
-        )
-        .await;
-        RocketChat {
+        let ws = RocketChatWsWriter::new(username.clone(), password, ws_writer, &ws_reader).await?;
+        Ok(RocketChat {
             ui,
             ws,
             ws_reader,
@@ -60,29 +63,31 @@ impl RocketChat {
             ponger,
             ui_rx,
             username,
-        }
+        })
     }
 }
 #[async_trait]
 impl Chat for RocketChat {
-    async fn init_view(&self, channel: Channel) -> Result<(), String> {
+    async fn init_view(&self, channel: Channel) -> Result<(), Box<dyn Error>> {
         let channel_to_switch = channel.clone();
         self.ws
             .load_history(format!("{}", channel_to_switch), 100)
-            .await;
-        self.ws.load_rooms().await;
-        self.ws.subscribe_user().await;
-        self.ui.select_channel(channel_to_switch);
+            .await?;
+        self.ws.load_rooms().await?;
+        self.ws.subscribe_user().await?;
+        self.ui.select_channel(channel_to_switch)?;
         Ok(())
     }
 
-    async fn send_message(&self, content: String, channel: Channel) -> Result<(), String> {
-        self.ws.send_message(format!("{}", channel), content).await;
+    async fn send_message(&self, content: String, channel: Channel) -> Result<(), Box<dyn Error>> {
+        self.ws
+            .send_message(format!("{}", channel), content)
+            .await?;
         Ok(())
     }
-    async fn wait_for_messages(&self) -> Result<(), String> {
+    async fn wait_for_messages(&self) -> Result<(), Box<dyn Error>> {
         loop {
-            let msg = self.ws_reader.recv().await.unwrap();
+            let msg = self.ws_reader.recv().await?;
             if let Ok(resp) = serde_json::from_str::<WsResponse>(&format!("{}", msg)[..]) {
                 match resp {
                     WsResponse::NewMessage(ms) => {
@@ -95,15 +100,14 @@ impl Chat for RocketChat {
                                 },
                                 Channel::Group(ms.fields.args.1.last_message.rid.clone()),
                             ))
-                            .await
-                            .unwrap_or_else(|err| info!("{:?}", err));
+                            .await?;
                     }
                     WsResponse::History { result, .. } => {
                         let messages =
                             result.messages.iter().rev().fold(String::from(""), |x, y| {
                                 format!("{}[{}]: {}\n", x, y.u.username.clone(), y.msg)
                             });
-                        self.ui.update_messages(messages);
+                        self.ui.update_messages(messages)?;
                     }
 
                     WsResponse::Rooms { result, .. } => {
@@ -113,7 +117,8 @@ impl Chat for RocketChat {
                             .map(|x| match x {
                                 RoomResponseWs::Direct(DirectChatResponseWs { _id, usernames }) => {
                                     let username = usernames
-                                        .iter().cloned()
+                                        .iter()
+                                        .cloned()
                                         .filter(|x| x != &self.username)
                                         .collect::<Vec<String>>();
                                     let username = username.get(0).unwrap_or(&self.username);
@@ -127,10 +132,10 @@ impl Chat for RocketChat {
                                 }
                             })
                             .collect::<Vec<(String, Channel)>>();
-                        self.ui.update_channels(channels)
+                        self.ui.update_channels(channels)?
                     }
                     WsResponse::Ping { msg } if msg == "ping" => {
-                        self.ponger.send(r#"{"msg": "pong"}"#.into()).await.unwrap();
+                        self.ponger.send(r#"{"msg": "pong"}"#.into()).await?;
                     }
                     _ => {}
                 }
@@ -138,26 +143,27 @@ impl Chat for RocketChat {
         }
     }
 
-    async fn update_ui(&self) -> Result<(), String> {
+    async fn update_ui(&self) -> Result<(), Box<dyn Error>> {
         loop {
             match self.ui_rx.recv().await {
                 Ok(ChatEvent::SendMessage(message, channel)) => {
-                    self.send_message(message, channel).await.unwrap();
+                    self.send_message(message, channel).await?;
                 }
                 Ok(ChatEvent::Init(channel)) => {
                     info!("INIT {}", channel);
-                    self.init_view(channel).await.unwrap();
+                    self.init_view(channel).await?;
                 }
                 Ok(ChatEvent::RecvMessage(message, channel)) => {
                     info!("Rcv {} {}", message, channel);
-                    self.add_message(message, channel).await;
+                    self.add_message(message, channel).await?;
                 }
                 Err(_) => continue,
             };
         }
     }
 
-    async fn add_message(&self, message: Message, _channel: Channel) {
-        self.ui.add_message(message);
+    async fn add_message(&self, message: Message, _channel: Channel) -> Result<(), Box<dyn Error>> {
+        self.ui.add_message(message)?;
+        Ok(())
     }
 }

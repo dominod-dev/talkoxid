@@ -4,6 +4,8 @@ use async_trait::async_trait;
 use cursive::view::ScrollStrategy;
 use cursive::views::{NamedView, ResizedView, ScrollView, SelectView};
 use cursive::{CbSink, Cursive};
+use log::error;
+use std::error::Error;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use views::{BufferView, MessageBoxView};
@@ -58,18 +60,18 @@ pub enum ChatEvent {
 
 #[async_trait]
 pub trait Chat {
-    async fn init_view(&self, channel: Channel) -> Result<(), String>;
-    async fn send_message(&self, content: String, channel: Channel) -> Result<(), String>;
-    async fn add_message(&self, message: Message, channel: Channel);
-    async fn wait_for_messages(&self) -> Result<(), String>;
-    async fn update_ui(&self) -> Result<(), String>;
+    async fn init_view(&self, channel: Channel) -> Result<(), Box<dyn Error>>;
+    async fn send_message(&self, content: String, channel: Channel) -> Result<(), Box<dyn Error>>;
+    async fn add_message(&self, message: Message, channel: Channel) -> Result<(), Box<dyn Error>>;
+    async fn wait_for_messages(&self) -> Result<(), Box<dyn Error>>;
+    async fn update_ui(&self) -> Result<(), Box<dyn Error>>;
 }
 
 pub trait UI {
-    fn update_messages(&self, content: String);
-    fn update_channels(&self, channels: Vec<(String, Channel)>);
-    fn add_message(&self, message: Message);
-    fn select_channel(&self, channel: Channel);
+    fn update_messages(&self, content: String) -> Result<(), Box<dyn Error>>;
+    fn update_channels(&self, channels: Vec<(String, Channel)>) -> Result<(), Box<dyn Error>>;
+    fn add_message(&self, message: Message) -> Result<(), Box<dyn Error>>;
+    fn select_channel(&self, channel: Channel) -> Result<(), Box<dyn Error>>;
 }
 
 pub struct CursiveUI {
@@ -83,15 +85,14 @@ impl CursiveUI {
 }
 
 impl UI for CursiveUI {
-    fn update_messages(&self, messages: String) {
-        self.cb_sink
-            .send(Box::new(|siv: &mut Cursive| {
-                siv.call_on_name("chat", move |view: &mut BufferView| view.init(messages));
-            }))
-            .unwrap();
+    fn update_messages(&self, messages: String) -> Result<(), Box<dyn Error>> {
+        self.cb_sink.send(Box::new(|siv: &mut Cursive| {
+            siv.call_on_name("chat", move |view: &mut BufferView| view.init(messages));
+        }))?;
+        Ok(())
     }
 
-    fn update_channels(&self, channels: Vec<(String, Channel)>) {
+    fn update_channels(&self, channels: Vec<(String, Channel)>) -> Result<(), Box<dyn Error>> {
         let chats: Vec<(String, Channel)> = channels
             .iter()
             .cloned()
@@ -114,54 +115,62 @@ impl UI for CursiveUI {
                 }
             })
             .collect();
-        self.cb_sink
-            .send(Box::new(|siv: &mut Cursive| {
-                siv.call_on_name("channel_list", move |view: &mut SelectView<Channel>| {
-                    let selected = view.selection().unwrap_or(std::rc::Rc::new(Channel::Group("GENERAL".into())));
-                    let index = chats.iter().position(|x| &x.1 == selected.as_ref()).unwrap_or_default();
-                    view.clear();
-                    view.add_all(chats);
-                    if let &Channel::Group(_) = selected.as_ref() {
-                        view.set_selection(index);
-                    }
-                });
-                siv.call_on_name("users_list", move |view: &mut SelectView<Channel>| {
-                    let selected = view.selection().unwrap_or(std::rc::Rc::new(Channel::Group("GENERAL".into())));
-                    let index = users.iter().position(|x| &x.1 == selected.as_ref()).unwrap_or_default();
-                    view.clear();
-                    view.add_all(users);
-                    if let &Channel::User(_) = selected.as_ref() {
-                        view.set_selection(index);
-                    }
-                });
-            }))
-            .unwrap();
+        self.cb_sink.send(Box::new(|siv: &mut Cursive| {
+            siv.call_on_name("channel_list", move |view: &mut SelectView<Channel>| {
+                let selected = view
+                    .selection()
+                    .unwrap_or(std::rc::Rc::new(Channel::Group("GENERAL".into())));
+                let index = chats
+                    .iter()
+                    .position(|x| &x.1 == selected.as_ref())
+                    .unwrap_or_default();
+                view.clear();
+                view.add_all(chats);
+                if let &Channel::Group(_) = selected.as_ref() {
+                    view.set_selection(index);
+                }
+            });
+            siv.call_on_name("users_list", move |view: &mut SelectView<Channel>| {
+                let selected = view
+                    .selection()
+                    .unwrap_or(std::rc::Rc::new(Channel::Group("GENERAL".into())));
+                let index = users
+                    .iter()
+                    .position(|x| &x.1 == selected.as_ref())
+                    .unwrap_or_default();
+                view.clear();
+                view.add_all(users);
+                if let &Channel::User(_) = selected.as_ref() {
+                    view.set_selection(index);
+                }
+            });
+        }))?;
+        Ok(())
     }
 
-    fn add_message(&self, message: Message) {
-        self.cb_sink
-            .send(Box::new(|siv: &mut Cursive| {
-                siv.call_on_name("chat", move |view: &mut BufferView| {
-                    view.add_message(format!("{}\n", message))
-                });
-                siv.call_on_name(
-                    "scroll",
-                    move |view: &mut ScrollView<ResizedView<NamedView<BufferView>>>| {
-                        view.scroll_to_bottom();
-                        view.set_scroll_strategy(ScrollStrategy::StickToBottom);
-                    },
-                );
-            }))
-            .unwrap();
+    fn add_message(&self, message: Message) -> Result<(), Box<dyn Error>> {
+        self.cb_sink.send(Box::new(|siv: &mut Cursive| {
+            siv.call_on_name("chat", move |view: &mut BufferView| {
+                view.add_message(format!("{}\n", message))
+                    .unwrap_or_else(|err| error!("Can't add message: {}", err))
+            });
+            siv.call_on_name(
+                "scroll",
+                move |view: &mut ScrollView<ResizedView<NamedView<BufferView>>>| {
+                    view.scroll_to_bottom();
+                    view.set_scroll_strategy(ScrollStrategy::StickToBottom);
+                },
+            );
+        }))?;
+        Ok(())
     }
 
-    fn select_channel(&self, channel: Channel) {
-        self.cb_sink
-            .send(Box::new(|siv: &mut Cursive| {
-                siv.call_on_name("input", move |view: &mut MessageBoxView| {
-                    view.channel = Some(channel);
-                });
-            }))
-            .unwrap();
+    fn select_channel(&self, channel: Channel) -> Result<(), Box<dyn Error>> {
+        self.cb_sink.send(Box::new(|siv: &mut Cursive| {
+            siv.call_on_name("input", move |view: &mut MessageBoxView| {
+                view.channel = Some(channel);
+            });
+        }))?;
+        Ok(())
     }
 }

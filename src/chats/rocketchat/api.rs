@@ -3,6 +3,7 @@ use async_channel::{Receiver, Sender};
 use log::info;
 use reqwest::Client;
 use sha2::{Digest, Sha256};
+use std::error::Error;
 use tokio_tungstenite::tungstenite;
 use url::Url;
 
@@ -200,32 +201,30 @@ impl RocketChatWsWriter {
         password: String,
         websocket: Sender<tungstenite::Message>,
         reader: &Receiver<tungstenite::Message>,
-    ) -> Self {
+    ) -> Result<Self, Box<dyn Error>> {
         let mut hasher = Sha256::new();
         hasher.update(password);
         let password_digest = format!("{:x}", hasher.finalize());
-        info!("{:?}", reader.recv().await.unwrap());
-        RocketChatWsWriter::connect(&websocket).await;
-        info!("{:?}", reader.recv().await.unwrap());
-        RocketChatWsWriter::init(&username, &password_digest, &websocket).await;
-        let msg = reader.recv().await.unwrap();
+        info!("{:?}", reader.recv().await);
+        RocketChatWsWriter::connect(&websocket).await?;
+        info!("{:?}", reader.recv().await);
+        RocketChatWsWriter::init(&username, &password_digest, &websocket).await?;
+        let msg = reader.recv().await?;
         info!("{:?}", msg);
-        let user_id = serde_json::from_str::<UserIdResponse>(&msg.to_string()[..])
-            .unwrap()
-            .id;
-        RocketChatWsWriter {
+        let user_id = serde_json::from_str::<UserIdResponse>(&msg.to_string()[..])?.id;
+        Ok(RocketChatWsWriter {
             username,
             password_digest,
             user_id,
             websocket,
-        }
+        })
     }
 
     pub async fn init(
         username: &str,
         password_digest: &str,
         websocket: &Sender<tungstenite::Message>,
-    ) {
+    ) -> Result<(), Box<dyn Error>> {
         let login = LoginWs {
             msg: "method".into(),
             method: "login".into(),
@@ -241,14 +240,12 @@ impl RocketChatWsWriter {
             }],
         };
         websocket
-            .send(tungstenite::Message::Text(
-                serde_json::to_string(&login).unwrap(),
-            ))
-            .await
-            .unwrap();
+            .send(tungstenite::Message::Text(serde_json::to_string(&login)?))
+            .await?;
+        Ok(())
     }
 
-    pub async fn login(&self) {
+    pub async fn login(&self) -> Result<(), Box<dyn Error>> {
         let login = LoginWs {
             msg: "method".into(),
             method: "login".into(),
@@ -264,38 +261,32 @@ impl RocketChatWsWriter {
             }],
         };
         self.websocket
-            .send(tungstenite::Message::Text(
-                serde_json::to_string(&login).unwrap(),
-            ))
-            .await
-            .unwrap();
+            .send(tungstenite::Message::Text(serde_json::to_string(&login)?))
+            .await?;
+        Ok(())
     }
 
-    pub async fn connect(writer: &Sender<tungstenite::Message>) {
+    pub async fn connect(writer: &Sender<tungstenite::Message>) -> Result<(), Box<dyn Error>> {
         let connect = ConnectWs {
             msg: "connect".into(),
             version: "1".into(),
             support: vec!["1".into()],
         };
         writer
-            .send(tungstenite::Message::Text(
-                serde_json::to_string(&connect).unwrap(),
-            ))
-            .await
-            .unwrap();
+            .send(tungstenite::Message::Text(serde_json::to_string(&connect)?))
+            .await?;
+        Ok(())
     }
 
-    pub async fn pong(&self) {
+    pub async fn pong(&self) -> Result<(), Box<dyn Error>> {
         let pong = PongWs { msg: "pong".into() };
         self.websocket
-            .send(tungstenite::Message::Text(
-                serde_json::to_string(&pong).unwrap(),
-            ))
-            .await
-            .unwrap();
+            .send(tungstenite::Message::Text(serde_json::to_string(&pong)?))
+            .await?;
+        Ok(())
     }
 
-    pub async fn subscribe_user(&self) {
+    pub async fn subscribe_user(&self) -> Result<(), Box<dyn Error>> {
         let sub = SubStreamChannelWs {
             msg: "sub".into(),
             id: "1234".into(),
@@ -306,14 +297,16 @@ impl RocketChatWsWriter {
             ],
         };
         self.websocket
-            .send(tungstenite::Message::Text(
-                serde_json::to_string(&sub).unwrap(),
-            ))
-            .await
-            .unwrap();
+            .send(tungstenite::Message::Text(serde_json::to_string(&sub)?))
+            .await?;
+        Ok(())
     }
 
-    pub async fn send_message(&self, room_id: String, content: String) {
+    pub async fn send_message(
+        &self,
+        room_id: String,
+        content: String,
+    ) -> Result<(), Box<dyn Error>> {
         let msg = format!(
             r#"
             {{
@@ -330,13 +323,11 @@ impl RocketChatWsWriter {
         "#,
             room_id, content
         );
-        self.websocket
-            .send(tungstenite::Message::Text(msg))
-            .await
-            .unwrap();
+        self.websocket.send(tungstenite::Message::Text(msg)).await?;
+        Ok(())
     }
 
-    pub async fn load_history(&self, room_id: String, count: usize) {
+    pub async fn load_history(&self, room_id: String, count: usize) -> Result<(), Box<dyn Error>> {
         let msg = format!(
             r#"
             {{
@@ -348,13 +339,11 @@ impl RocketChatWsWriter {
         "#,
             room_id, count
         );
-        self.websocket
-            .send(tungstenite::Message::Text(msg))
-            .await
-            .unwrap();
+        self.websocket.send(tungstenite::Message::Text(msg)).await?;
+        Ok(())
     }
 
-    pub async fn load_rooms(&self) {
+    pub async fn load_rooms(&self) -> Result<(), Box<dyn Error>> {
         let msg = r#"
             {
                 "msg": "method",
@@ -365,7 +354,7 @@ impl RocketChatWsWriter {
         "#;
         self.websocket
             .send(tungstenite::Message::Text(msg.into()))
-            .await
-            .unwrap();
+            .await?;
+        Ok(())
     }
 }

@@ -6,6 +6,7 @@ use cursive::view::ViewWrapper;
 use cursive::views::{EditView, TextView};
 use cursive::wrap_impl;
 use cursive::{CbSink, Cursive};
+use std::error::Error;
 
 use super::{Channel, ChatEvent};
 
@@ -69,14 +70,16 @@ impl BufferView {
         BufferView { view, cb_sink }
     }
 
-    pub fn init(&mut self, content: String) {
+    pub fn init(&mut self, content: String) -> Result<(), Box<dyn Error>> {
         self.view.set_content(content);
-        self.cb_sink.send(Box::new(Cursive::noop)).unwrap();
+        self.cb_sink.send(Box::new(Cursive::noop))?;
+        Ok(())
     }
 
-    pub fn add_message(&mut self, message: String) {
+    pub fn add_message(&mut self, message: String) -> Result<(), Box<dyn Error>> {
         self.view.append(message);
-        self.cb_sink.send(Box::new(Cursive::noop)).unwrap();
+        self.cb_sink.send(Box::new(Cursive::noop))?;
+        Ok(())
     }
 }
 

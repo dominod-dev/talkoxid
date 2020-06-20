@@ -9,6 +9,7 @@ use oxychat::chats::RocketChat;
 use oxychat::views::{BufferView, MessageBoxView};
 use oxychat::Chat;
 use oxychat::{Channel, ChatEvent, CursiveUI};
+use std::error::Error;
 use std::thread;
 use tokio::runtime::Runtime;
 use url::Url;
@@ -21,18 +22,19 @@ async fn chat_loop(
 ) {
     let ui = Box::new(CursiveUI::new(cb_sink.clone()));
     let chat_system = RocketChat::new(
-        Url::parse("http://localhost:3000/").unwrap(),
+        Url::parse("http://localhost:3000/").unwrap_or_else(|err| panic!("Bad url :{:?}", err)),
         "collkid".to_string(),
         "collkid".to_string(),
         ui,
         tx,
         rx,
     )
-    .await;
+    .await
+    .unwrap_or_else(|err| panic!("Can't create chat system: {}", err));
     chat_system
         .init_view(Channel::Group("GENERAL".to_string()))
         .await
-        .unwrap();
+        .unwrap_or_else(|err| panic!("Can't init chat system: {}", err));
     let read_loop = chat_system.wait_for_messages();
     let ui_event_loop = chat_system.update_ui();
     tokio::select! {
@@ -60,7 +62,7 @@ fn on_channel_changed(
     return closure;
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn Error>> {
     log4rs::init_file("config/log4rs.yaml", Default::default()).unwrap();
     let mut siv = cursive::default();
     let cb_sink = siv.cb_sink().clone();
