@@ -67,8 +67,7 @@ pub trait Chat {
 
 pub trait UI {
     fn update_messages(&self, content: String);
-    fn update_channels(&self, channels: Vec<(String, Channel)>, current_channel: Option<Channel>);
-    fn update_users(&self, users: Vec<(String, Channel)>);
+    fn update_channels(&self, channels: Vec<(String, Channel)>);
     fn add_message(&self, message: Message);
     fn select_channel(&self, channel: Channel);
 }
@@ -92,31 +91,48 @@ impl UI for CursiveUI {
             .unwrap();
     }
 
-    fn update_channels(&self, channels: Vec<(String, Channel)>, current_channel: Option<Channel>) {
-        let mut index = 0;
-        if let Some(channel) = current_channel {
-            index = channels
-                .iter()
-                .position(|x| x.1 == channel)
-                .unwrap_or_default();
-        }
-        self.cb_sink
-            .send(Box::new(move |siv: &mut Cursive| {
-                siv.call_on_name("channel_list", move |view: &mut SelectView<Channel>| {
-                    view.clear();
-                    view.add_all(channels);
-                    view.set_selection(index)
-                });
-            }))
-            .unwrap();
-    }
-
-    fn update_users(&self, users: Vec<(String, Channel)>) {
+    fn update_channels(&self, channels: Vec<(String, Channel)>) {
+        let chats: Vec<(String, Channel)> = channels
+            .iter()
+            .cloned()
+            .filter(move |x| {
+                if let (_, Channel::Group(_)) = x {
+                    true
+                } else {
+                    false
+                }
+            })
+            .collect();
+        let users: Vec<(String, Channel)> = channels
+            .iter()
+            .cloned()
+            .filter(move |x| {
+                if let (_, Channel::User(_)) = x {
+                    true
+                } else {
+                    false
+                }
+            })
+            .collect();
         self.cb_sink
             .send(Box::new(|siv: &mut Cursive| {
+                siv.call_on_name("channel_list", move |view: &mut SelectView<Channel>| {
+                    let selected = view.selection().unwrap_or(std::rc::Rc::new(Channel::Group("GENERAL".into())));
+                    let index = chats.iter().position(|x| &x.1 == selected.as_ref()).unwrap_or_default();
+                    view.clear();
+                    view.add_all(chats);
+                    if let &Channel::Group(_) = selected.as_ref() {
+                        view.set_selection(index);
+                    }
+                });
                 siv.call_on_name("users_list", move |view: &mut SelectView<Channel>| {
+                    let selected = view.selection().unwrap_or(std::rc::Rc::new(Channel::Group("GENERAL".into())));
+                    let index = users.iter().position(|x| &x.1 == selected.as_ref()).unwrap_or_default();
                     view.clear();
                     view.add_all(users);
+                    if let &Channel::User(_) = selected.as_ref() {
+                        view.set_selection(index);
+                    }
                 });
             }))
             .unwrap();

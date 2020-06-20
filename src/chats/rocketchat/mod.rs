@@ -3,7 +3,7 @@ use async_trait::async_trait;
 pub mod schema;
 use super::super::UI;
 use super::super::{Channel, Chat, ChatEvent, Message};
-use api::{RocketChatApi, RocketChatWsWriter};
+use api::RocketChatWsWriter;
 use async_channel::{Receiver, Sender};
 use futures_util::StreamExt;
 use log::info;
@@ -12,13 +12,13 @@ use tokio_tungstenite::tungstenite;
 use url::Url;
 
 pub struct RocketChat {
-    api: RocketChatApi,
     ui: Box<dyn UI + Send + Sync>,
     ws: api::RocketChatWsWriter,
     ws_reader: Receiver<tungstenite::Message>,
     ui_tx: Sender<ChatEvent>,
     ponger: Sender<tungstenite::Message>,
     ui_rx: Receiver<ChatEvent>,
+    username: String,
 }
 
 impl RocketChat {
@@ -30,8 +30,6 @@ impl RocketChat {
         ui_tx: Sender<ChatEvent>,
         ui_rx: Receiver<ChatEvent>,
     ) -> Self {
-        let mut api = RocketChatApi::new(host.clone(), username.clone(), password.clone());
-        api.login().await.unwrap();
         let mut ws_host = host.clone();
         ws_host.set_scheme("ws").unwrap();
         ws_host.set_path("/websocket");
@@ -48,49 +46,31 @@ impl RocketChat {
             }
         });
         let ws = RocketChatWsWriter::new(
-            "collkid".to_string(),
-            "collkid".to_string(),
+            username.clone(),
+            password,
             ws_writer,
             &ws_reader,
         )
         .await;
         RocketChat {
-            api,
             ui,
             ws,
             ws_reader,
             ui_tx,
             ponger,
             ui_rx,
+            username,
         }
     }
 }
 #[async_trait]
 impl Chat for RocketChat {
     async fn init_view(&self, channel: Channel) -> Result<(), String> {
-        let channels = self.api.rooms().await?;
-        let users = self.api.users().await?;
         let channel_to_switch = channel.clone();
-        self.ws.load_history(format!("{}", channel_to_switch), 100).await;
-        self.ui.update_channels(
-            channels
-                .iter()
-                .map(|x| match (&x.name, &x.usernames) {
-                    (Some(name), _) => (name.clone(), Channel::Group(x._id.clone())),
-                    (None, Some(username)) => {
-                        (format!("{:?}", username), Channel::Group(x._id.clone()))
-                    }
-                    _ => (x._id.clone(), Channel::Group(x._id.clone())),
-                })
-                .collect::<Vec<(String, Channel)>>(),
-            Some(channel),
-        );
-        self.ui.update_users(
-            users
-                .iter()
-                .map(|x| (x.name.clone(), Channel::User(x.name.clone())))
-                .collect::<Vec<(String, Channel)>>(),
-        );
+        self.ws
+            .load_history(format!("{}", channel_to_switch), 100)
+            .await;
+        self.ws.load_rooms().await;
         self.ws.subscribe_user().await;
         self.ui.select_channel(channel_to_switch);
         Ok(())
@@ -107,26 +87,51 @@ impl Chat for RocketChat {
                 match resp {
                     WsResponse::NewMessage(ms) => {
                         &self
-                        .ui_tx
-                        .send(ChatEvent::RecvMessage(
-                            Message {
-                                author: ms.fields.args.1.last_message.u.username.clone(),
-                                content: ms.fields.args.1.last_message.msg.clone(),
-                            },
-                            Channel::Group(ms.fields.args.1.last_message.rid.clone()),
-                        ))
-                        .await
-                        .unwrap_or_else(|err| info!("{:?}", err));
-                    },
-                    WsResponse::History {result, ..} => {
-                        let messages = result.messages.iter().rev().fold(String::from(""), |x, y| {
-                            format!("{}[{}]: {}\n", x, y.u.username.clone(), y.msg)
-                        });
+                            .ui_tx
+                            .send(ChatEvent::RecvMessage(
+                                Message {
+                                    author: ms.fields.args.1.last_message.u.username.clone(),
+                                    content: ms.fields.args.1.last_message.msg.clone(),
+                                },
+                                Channel::Group(ms.fields.args.1.last_message.rid.clone()),
+                            ))
+                            .await
+                            .unwrap_or_else(|err| info!("{:?}", err));
+                    }
+                    WsResponse::History { result, .. } => {
+                        let messages =
+                            result.messages.iter().rev().fold(String::from(""), |x, y| {
+                                format!("{}[{}]: {}\n", x, y.u.username.clone(), y.msg)
+                            });
                         self.ui.update_messages(messages);
-                    },
-                    WsResponse::Ping {msg} if msg == "ping" => {
+                    }
+
+                    WsResponse::Rooms { result, .. } => {
+                        let channels = result
+                            .update
+                            .iter()
+                            .map(|x| match x {
+                                RoomResponseWs::Direct(DirectChatResponseWs { _id, usernames }) => {
+                                    let username = usernames
+                                        .iter().cloned()
+                                        .filter(|x| x != &self.username)
+                                        .collect::<Vec<String>>();
+                                    let username = username.get(0).unwrap_or(&self.username);
+                                    (username.into(), Channel::User(_id.clone()))
+                                }
+                                RoomResponseWs::Chat(ChatResponseWs { _id, name }) => {
+                                    (name.clone(), Channel::Group(_id.clone()))
+                                }
+                                RoomResponseWs::Private(ChatResponseWs { _id, name }) => {
+                                    (name.clone(), Channel::Group(_id.clone()))
+                                }
+                            })
+                            .collect::<Vec<(String, Channel)>>();
+                        self.ui.update_channels(channels)
+                    }
+                    WsResponse::Ping { msg } if msg == "ping" => {
                         self.ponger.send(r#"{"msg": "pong"}"#.into()).await.unwrap();
-                    },
+                    }
                     _ => {}
                 }
             }
