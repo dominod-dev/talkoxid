@@ -1,6 +1,5 @@
 use super::schema::*;
 use async_channel::{Receiver, Sender};
-use log::info;
 use reqwest::Client;
 use sha2::{Digest, Sha256};
 use std::error::Error;
@@ -205,12 +204,11 @@ impl RocketChatWsWriter {
         let mut hasher = Sha256::new();
         hasher.update(password);
         let password_digest = format!("{:x}", hasher.finalize());
-        info!("{:?}", reader.recv().await);
+        reader.recv().await?;
         RocketChatWsWriter::connect(&websocket).await?;
-        info!("{:?}", reader.recv().await);
+        reader.recv().await?;
         RocketChatWsWriter::init(&username, &password_digest, &websocket).await?;
         let msg = reader.recv().await?;
-        info!("{:?}", msg);
         let user_id = serde_json::from_str::<UserIdResponse>(&msg.to_string()[..])?.id;
         Ok(RocketChatWsWriter {
             username,

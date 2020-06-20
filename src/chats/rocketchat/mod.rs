@@ -6,11 +6,11 @@ use super::super::{Channel, Chat, ChatEvent, Message};
 use api::RocketChatWsWriter;
 use async_channel::{Receiver, Sender};
 use futures_util::StreamExt;
-use log::info;
 use schema::*;
 use std::error::Error;
 use tokio_tungstenite::tungstenite;
 use url::Url;
+use log::error;
 
 pub struct RocketChat {
     ui: Box<dyn UI + Send + Sync>,
@@ -44,14 +44,16 @@ impl RocketChat {
         tokio::spawn(rxws.map(Ok).forward(write));
         tokio::spawn(async move {
             loop {
-                let msg = read
-                    .next()
-                    .await
-                    .unwrap_or_else(|| panic!("Reading message returned None"))
-                    .unwrap_or_else(|err| panic!("{:?}", err));
-                txws.send(msg)
-                    .await
-                    .unwrap_or_else(|err| panic!("{:?}", err));
+                let msg = read.next().await;
+                match msg {
+                    Some(Ok(msg)) => {
+                        if let Err(err) =  txws.send(msg).await {
+                            error!("Error when sending to ws sender: {}", err); break
+                        }
+                    },
+                    Some(Err(err)) => {error!("Error when reading websocket: {}", err); break}
+                    None => {error!("No message when reading websocket"); break}
+                }
             }
         });
         let ws = RocketChatWsWriter::new(username.clone(), password, ws_writer, &ws_reader).await?;
@@ -150,11 +152,9 @@ impl Chat for RocketChat {
                     self.send_message(message, channel).await?;
                 }
                 Ok(ChatEvent::Init(channel)) => {
-                    info!("INIT {}", channel);
                     self.init_view(channel).await?;
                 }
                 Ok(ChatEvent::RecvMessage(message, channel)) => {
-                    info!("Rcv {} {}", message, channel);
                     self.add_message(message, channel).await?;
                 }
                 Err(_) => continue,
