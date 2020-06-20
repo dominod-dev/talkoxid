@@ -55,11 +55,10 @@ fn on_channel_changed(
     tx: async_channel::Sender<ChatEvent>,
     rt: tokio::runtime::Handle,
 ) -> impl Fn(&mut Cursive, &Channel) -> () {
-    let closure = move |siv: &mut Cursive, item: &Channel| {
+    move |siv: &mut Cursive, item: &Channel| {
         rt.block_on(async { tx.send(ChatEvent::Init(item.clone())).await.unwrap() });
         siv.focus_name("input").unwrap();
-    };
-    return closure;
+    }
 }
 
 fn main() -> Result<(), Box<dyn Error>> {

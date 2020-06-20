@@ -91,7 +91,7 @@ impl Chat for RocketChat {
             if let Ok(resp) = serde_json::from_str::<WsResponse>(&format!("{}", msg)[..]) {
                 match resp {
                     WsResponse::NewMessage(ms) => {
-                        &self
+                        self
                             .ui_tx
                             .send(ChatEvent::RecvMessage(
                                 Message {
