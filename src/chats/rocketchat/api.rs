@@ -353,4 +353,19 @@ impl RocketChatWsWriter {
             .await
             .unwrap();
     }
+
+    pub async fn load_rooms(&self) {
+        let msg = r#"
+            {
+                "msg": "method",
+                "method": "rooms/get",
+                "id": "42",
+                "params": [ { "$date": 0 } ]
+            }
+        "#;
+        self.websocket
+            .send(tungstenite::Message::Text(msg.into()))
+            .await
+            .unwrap();
+    }
 }
