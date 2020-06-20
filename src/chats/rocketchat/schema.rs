@@ -158,6 +158,35 @@ pub struct UserIdResponse {
 }
 
 #[derive(Deserialize, Debug)]
+pub struct DirectChatResponseWs {
+    pub _id: String,
+    pub usernames: Vec<String>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct ChatResponseWs {
+    pub _id: String,
+    pub name: String,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(tag = "t")]
+pub enum RoomResponseWs {
+    #[serde(rename = "d")]
+    Direct(DirectChatResponseWs),
+    #[serde(rename = "c")]
+    Chat(ChatResponseWs),
+    #[serde(rename = "p")]
+    Private(ChatResponseWs),
+}
+
+#[derive(Deserialize, Debug)]
+pub struct RoomsResponseWs {
+    pub update: Vec<RoomResponseWs>,
+    pub remove: Vec<String>,
+}
+
+#[derive(Deserialize, Debug)]
 #[serde(untagged)]
 pub enum WsResponse {
     NewMessage(SocketMessageWs),
@@ -165,6 +194,11 @@ pub enum WsResponse {
         msg: String,
         id: String,
         result: ChannelHistoryResponseWs,
+    },
+    Rooms {
+        msg: String,
+        id: String,
+        result: RoomsResponseWs,
     },
     Ping {
         msg: String,
