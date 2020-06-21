@@ -20,7 +20,7 @@ async fn chat_loop(
     close_rx: async_channel::Receiver<()>,
     cb_sink: CbSink,
 ) {
-    let ui = Box::new(CursiveUI::new(cb_sink.clone()));
+    let ui = Box::new(CursiveUI::new(cb_sink));
     let chat_system = RocketChat::new(
         Url::parse("http://localhost:3000/").unwrap_or_else(|err| panic!("Bad url :{:?}", err)),
         "collkid".to_string(),
@@ -63,16 +63,21 @@ fn on_channel_changed(
 
 fn main() -> Result<(), Box<dyn Error>> {
     log4rs::init_file("config/log4rs.yaml", Default::default()).unwrap();
-    let mut siv = cursive::default();
-    let cb_sink = siv.cb_sink().clone();
+
     let (tx, rx) = unbounded();
     let (close_tx, close_rx) = bounded(1);
-    let tx2 = tx.clone();
+    let tx_cloned = tx.clone();
+
     let rt = Runtime::new().unwrap();
     let handle = rt.handle().clone();
+
+    let mut siv = cursive::default();
+    let cb_sink = siv.cb_sink().clone();
+
     let th = thread::spawn(move || {
-        handle.block_on(chat_loop(tx2, rx, close_rx, cb_sink));
+        handle.block_on(chat_loop(tx_cloned, rx, close_rx, cb_sink));
     });
+
     let cb_sink = siv.cb_sink().clone();
     siv.add_global_callback('q', |s| s.quit());
     siv.load_theme_file("assets/style.toml").unwrap();
@@ -130,9 +135,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     siv.add_fullscreen_layer(global_layout);
     siv.focus_name("input").unwrap();
     siv.run();
+
     rt.handle()
         .clone()
         .block_on(async { close_tx.send(()).await.unwrap() });
     th.join().unwrap();
+
     Ok(())
 }
