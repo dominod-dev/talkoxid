@@ -99,6 +99,7 @@ impl Chat for RocketChat {
                                 Message {
                                     author: ms.fields.args.1.last_message.u.username.clone(),
                                     content: ms.fields.args.1.last_message.msg.clone(),
+                                    datetime: ms.fields.args.1.last_message.ts.date,
                                 },
                                 Channel::Group(ms.fields.args.1.last_message.rid.clone()),
                             ))
@@ -107,7 +108,7 @@ impl Chat for RocketChat {
                     WsResponse::History { result, .. } => {
                         let messages =
                             result.messages.iter().rev().fold(String::from(""), |x, y| {
-                                format!("{}[{}]: {}\n", x, y.u.username.clone(), y.msg)
+                                format!("{}{}\n", x, Message { content: y.msg.clone(), author: y.u.username.clone(), datetime: y.ts.date })
                             });
                         self.ui.update_messages(messages)?;
                     }

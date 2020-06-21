@@ -9,16 +9,24 @@ use std::error::Error;
 use std::fmt;
 use views::{BufferView, MessageBoxView};
 use std::rc::Rc;
+use chrono::{DateTime, Utc};
 
 #[derive(Clone)]
 pub struct Message {
     pub author: String,
     pub content: String,
+    pub datetime: DateTime<Utc>,
 }
 
 impl fmt::Display for Message {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "[{}]: {}", self.author, self.content)
+        let today = chrono::offset::Local::today();
+        let localtime = self.datetime.with_timezone(&chrono::Local);
+        if localtime.date() < today {
+            write!(f, "[{}][{}]: {}", localtime.format("%Y-%m-%d %H:%M:%S"), self.author, self.content)
+        } else {
+            write!(f, "[{}][{}]: {}", localtime.format("%H:%M:%S"), self.author, self.content)
+        }
     }
 }
 

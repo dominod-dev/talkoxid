@@ -1,3 +1,5 @@
+use chrono::prelude::*;
+use chrono::serde::ts_milliseconds;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Debug, Clone)]
@@ -122,10 +124,18 @@ pub struct SubStreamChannelWs {
 }
 
 #[derive(Deserialize, Debug)]
+pub struct DateResponseWs {
+    #[serde(rename = "$date")]
+    #[serde(with = "ts_milliseconds")]
+    pub date: DateTime<Utc>,
+}
+
+#[derive(Deserialize, Debug)]
 pub struct MessageResponseWs {
     pub u: AuthorResponse,
     pub rid: String,
     pub msg: String,
+    pub ts: DateResponseWs,
 }
 
 #[derive(Deserialize, Debug)]
