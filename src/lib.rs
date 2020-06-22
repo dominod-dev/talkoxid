@@ -1,15 +1,15 @@
 pub mod chats;
 pub mod views;
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use cursive::view::ScrollStrategy;
-use cursive::views::{NamedView, ResizedView, ScrollView, SelectView};
+use cursive::views::{NamedView, ScrollView, SelectView};
 use cursive::{CbSink, Cursive};
 use log::error;
 use std::error::Error;
 use std::fmt;
-use views::{BufferView, MessageBoxView};
 use std::rc::Rc;
-use chrono::{DateTime, Utc};
+use views::{BufferView, MessageBoxView};
 
 #[derive(Clone)]
 pub struct Message {
@@ -23,9 +23,21 @@ impl fmt::Display for Message {
         let today = chrono::offset::Local::today();
         let localtime = self.datetime.with_timezone(&chrono::Local);
         if localtime.date() < today {
-            write!(f, "[{}][{}]: {}", localtime.format("%Y-%m-%d %H:%M:%S"), self.author, self.content)
+            write!(
+                f,
+                "[{}][{}]: {}",
+                localtime.format("%Y-%m-%d %H:%M:%S"),
+                self.author,
+                self.content
+            )
         } else {
-            write!(f, "[{}][{}]: {}", localtime.format("%H:%M:%S"), self.author, self.content)
+            write!(
+                f,
+                "[{}][{}]: {}",
+                localtime.format("%H:%M:%S"),
+                self.author,
+                self.content
+            )
         }
     }
 }
@@ -149,9 +161,10 @@ impl UI for CursiveUI {
             });
             siv.call_on_name(
                 "scroll",
-                move |view: &mut ScrollView<ResizedView<NamedView<BufferView>>>| {
-                    view.scroll_to_bottom();
-                    view.set_scroll_strategy(ScrollStrategy::StickToBottom);
+                move |view: &mut NamedView<ScrollView<NamedView<BufferView>>>| {
+                    view.get_mut().scroll_to_bottom();
+                    view.get_mut()
+                        .set_scroll_strategy(ScrollStrategy::StickToBottom);
                 },
             );
         }))?;

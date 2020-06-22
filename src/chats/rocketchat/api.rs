@@ -4,7 +4,6 @@ use sha2::{Digest, Sha256};
 use std::error::Error;
 use tokio_tungstenite::tungstenite;
 
-
 pub struct RocketChatWsWriter {
     username: String,
     password_digest: String,

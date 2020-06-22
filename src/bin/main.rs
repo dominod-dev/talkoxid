@@ -1,7 +1,7 @@
 use async_channel::{bounded, unbounded};
 use cursive::traits::*;
-use cursive::view::{ScrollStrategy, SizeConstraint};
-use cursive::views::{LinearLayout, ResizedView, ScrollView, SelectView, TextView};
+use cursive::view::ScrollStrategy;
+use cursive::views::{LinearLayout, SelectView, TextView};
 use cursive::{CbSink, Cursive};
 
 use log::{error, info};
@@ -82,55 +82,38 @@ fn main() -> Result<(), Box<dyn Error>> {
     siv.add_global_callback('q', |s| s.quit());
     siv.load_theme_file("assets/style.toml").unwrap();
     // siv.load_toml(include_str!("../../assets/style.toml")).unwrap()
-    let buffer = ScrollView::new(
-        BufferView::new(cb_sink.clone())
-            .with_name("chat")
-            .full_screen(),
-    )
-    .scroll_strategy(ScrollStrategy::StickToBottom)
-    .with_name("scroll");
-    let chat = ResizedView::new(SizeConstraint::Full, SizeConstraint::Full, buffer);
+    let buffer = BufferView::new(cb_sink.clone())
+        .with_name("chat")
+        .scrollable()
+        .scroll_strategy(ScrollStrategy::StickToBottom)
+        .with_name("scroll");
     let message_input_box =
-        MessageBoxView::new(None, async_channel::Sender::clone(&tx), rt.handle().clone())
-            .with_name("input");
+        MessageBoxView::new(None, tx.clone(), rt.handle().clone()).with_name("input");
 
     let channel_list = SelectView::<Channel>::new()
-        .on_submit(on_channel_changed(
-            async_channel::Sender::clone(&tx),
-            rt.handle().clone(),
-        ))
-        .with_name("channel_list");
+        .on_submit(on_channel_changed(tx.clone(), rt.handle().clone()))
+        .with_name("channel_list")
+        .scrollable();
     let users_list = SelectView::<Channel>::new()
-        .on_submit(on_channel_changed(
-            async_channel::Sender::clone(&tx),
-            rt.handle().clone(),
-        ))
-        .with_name("users_list");
-    let channel = ScrollView::new(
-        LinearLayout::vertical()
-            .child(TextView::new("CHANNELS:"))
-            .child(channel_list),
-    );
-    let users = ScrollView::new(
-        LinearLayout::vertical()
-            .child(TextView::new("USERS:"))
-            .child(users_list),
-    );
-    let channel_layout =
-        ResizedView::new(SizeConstraint::AtLeast(20), SizeConstraint::Full, channel);
-
-    let users_layout = ResizedView::new(SizeConstraint::AtLeast(20), SizeConstraint::Full, users);
-    let chat_layout = ResizedView::new(
-        SizeConstraint::Full,
-        SizeConstraint::Full,
-        LinearLayout::vertical()
-            .child(cursive::views::Panel::new(chat))
-            .child(message_input_box),
-    );
+        .on_submit(on_channel_changed(tx.clone(), rt.handle().clone()))
+        .with_name("users_list")
+        .scrollable();
+    let channels = LinearLayout::vertical()
+        .child(TextView::new("CHANNELS:"))
+        .child(channel_list)
+        .min_width(20);
+    let users = LinearLayout::vertical()
+        .child(TextView::new("USERS:"))
+        .child(users_list)
+        .min_width(20);
+    let chat_layout = LinearLayout::vertical()
+        .child(cursive::views::Panel::new(buffer).full_height())
+        .child(message_input_box)
+        .full_width();
     let global_layout = LinearLayout::horizontal()
-        .child(channel_layout)
+        .child(channels)
         .child(chat_layout)
-        .child(users_layout);
+        .child(users);
 
     siv.add_fullscreen_layer(global_layout);
     siv.focus_name("input").unwrap();

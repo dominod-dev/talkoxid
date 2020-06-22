@@ -6,11 +6,11 @@ use super::super::{Channel, Chat, ChatEvent, Message};
 use api::RocketChatWsWriter;
 use async_channel::{Receiver, Sender};
 use futures_util::StreamExt;
+use log::error;
 use schema::*;
 use std::error::Error;
 use tokio_tungstenite::tungstenite;
 use url::Url;
-use log::error;
 
 pub struct RocketChat {
     ui: Box<dyn UI + Send + Sync>,
@@ -47,12 +47,19 @@ impl RocketChat {
                 let msg = read.next().await;
                 match msg {
                     Some(Ok(msg)) => {
-                        if let Err(err) =  txws.send(msg).await {
-                            error!("Error when sending to ws sender: {}", err); break
+                        if let Err(err) = txws.send(msg).await {
+                            error!("Error when sending to ws sender: {}", err);
+                            break;
                         }
-                    },
-                    Some(Err(err)) => {error!("Error when reading websocket: {}", err); break}
-                    None => {error!("No message when reading websocket"); break}
+                    }
+                    Some(Err(err)) => {
+                        error!("Error when reading websocket: {}", err);
+                        break;
+                    }
+                    None => {
+                        error!("No message when reading websocket");
+                        break;
+                    }
                 }
             }
         });
@@ -93,8 +100,7 @@ impl Chat for RocketChat {
             if let Ok(resp) = serde_json::from_str::<WsResponse>(&format!("{}", msg)[..]) {
                 match resp {
                     WsResponse::NewMessage(ms) => {
-                        self
-                            .ui_tx
+                        self.ui_tx
                             .send(ChatEvent::RecvMessage(
                                 Message {
                                     author: ms.fields.args.1.last_message.u.username.clone(),
@@ -108,7 +114,15 @@ impl Chat for RocketChat {
                     WsResponse::History { result, .. } => {
                         let messages =
                             result.messages.iter().rev().fold(String::from(""), |x, y| {
-                                format!("{}{}\n", x, Message { content: y.msg.clone(), author: y.u.username.clone(), datetime: y.ts.date })
+                                format!(
+                                    "{}{}\n",
+                                    x,
+                                    Message {
+                                        content: y.msg.clone(),
+                                        author: y.u.username.clone(),
+                                        datetime: y.ts.date
+                                    }
+                                )
                             });
                         self.ui.update_messages(messages)?;
                     }

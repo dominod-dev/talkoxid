@@ -85,4 +85,10 @@ impl BufferView {
 
 impl<'a> ViewWrapper for BufferView {
     wrap_impl!(self.view: TextView);
+
+    fn wrap_required_size(&mut self, size: cursive::Vec2) -> cursive::Vec2 {
+        let mut required_size = self.view.required_size(size);
+        required_size.x = size.x;
+        required_size
+    }
 }
