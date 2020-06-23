@@ -156,6 +156,11 @@ impl Chat for RocketChat {
                             .collect::<Vec<(String, Channel)>>();
                         self.ui.update_channels(channels)?
                     }
+                    WsResponse::JoinedRoom { result, .. } => {
+                        self.ui_tx
+                            .send(ChatEvent::Init(Channel::Group(result.rid)))
+                            .await?;
+                    }
                     WsResponse::Ping { msg } if msg == "ping" => {
                         self.ponger.send(r#"{"msg": "pong"}"#.into()).await?;
                     }
@@ -169,7 +174,12 @@ impl Chat for RocketChat {
         loop {
             match self.ui_rx.recv().await {
                 Ok(ChatEvent::SendMessage(message, channel)) => {
-                    self.send_message(message, channel).await?;
+                    let split = message.split(" ").collect::<Vec<&str>>();
+                    if message.starts_with("/direct") && split.len() > 1 {
+                        self.ws.create_direct_chat(split[1].into()).await?;
+                    } else {
+                        self.send_message(message, channel).await?;
+                    }
                 }
                 Ok(ChatEvent::Init(channel)) => {
                     self.init_view(channel).await?;

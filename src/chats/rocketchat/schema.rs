@@ -197,6 +197,11 @@ pub struct RoomsResponseWs {
 }
 
 #[derive(Deserialize, Debug)]
+pub struct JoinedRoomResponseWs {
+    pub rid: String,
+}
+
+#[derive(Deserialize, Debug)]
 #[serde(untagged)]
 pub enum WsResponse {
     NewMessage(SocketMessageWs),
@@ -209,6 +214,11 @@ pub enum WsResponse {
         msg: String,
         id: String,
         result: RoomsResponseWs,
+    },
+    JoinedRoom {
+        msg: String,
+        id: String,
+        result: JoinedRoomResponseWs,
     },
     Ping {
         msg: String,

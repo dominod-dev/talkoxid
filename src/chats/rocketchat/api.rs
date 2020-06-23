@@ -172,4 +172,22 @@ impl RocketChatWsWriter {
             .await?;
         Ok(())
     }
+
+    pub async fn create_direct_chat(&self, username: String) -> Result<(), Box<dyn Error>> {
+        let msg = format!(
+            r#"
+            {{
+                "msg": "method",
+                "method": "createDirectMessage",
+                "id": "42",
+                "params": ["{}"]
+            }}
+        "#,
+            username
+        );
+        self.websocket
+            .send(tungstenite::Message::Text(msg.into()))
+            .await?;
+        Ok(())
+    }
 }
