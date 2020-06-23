@@ -193,7 +193,7 @@ pub enum RoomResponseWs {
 #[derive(Deserialize, Debug)]
 pub struct RoomsResponseWs {
     pub update: Vec<RoomResponseWs>,
-    pub remove: Vec<String>,
+    pub remove: Vec<serde_json::value::Value>,
 }
 
 #[derive(Deserialize, Debug)]
