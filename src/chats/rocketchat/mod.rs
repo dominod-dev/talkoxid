@@ -138,8 +138,13 @@ impl Chat for RocketChat {
                                         .cloned()
                                         .filter(|x| x != &self.username)
                                         .collect::<Vec<String>>();
-                                    let username = username.get(0).unwrap_or(&self.username);
-                                    (username.into(), Channel::User(_id.clone()))
+                                    if username.len() <= 1 && usernames.len() > 0 {
+                                        let username = username.get(0).unwrap_or(&self.username);
+                                        (username.into(), Channel::User(_id.clone()))
+                                    } else {
+                                        let all_usernames = username.join(",");
+                                        (all_usernames.into(), Channel::User(_id.clone()))
+                                    }
                                 }
                                 RoomResponseWs::Chat(ChatResponseWs { _id, name }) => {
                                     (name.clone(), Channel::Group(_id.clone()))
