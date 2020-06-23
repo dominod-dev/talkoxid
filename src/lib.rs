@@ -9,7 +9,7 @@ use log::error;
 use std::error::Error;
 use std::fmt;
 use std::rc::Rc;
-use views::{BufferView, MessageBoxView, ChannelView};
+use views::{BufferView, ChannelView, MessageBoxView};
 
 #[derive(Clone, Debug)]
 pub struct Message {
@@ -42,7 +42,7 @@ impl fmt::Display for Message {
     }
 }
 
-#[derive(Eq, PartialEq,PartialOrd, Clone, Debug)]
+#[derive(Eq, PartialEq, PartialOrd, Clone, Debug)]
 pub enum Channel {
     Group(String),
     User(String),
@@ -68,12 +68,11 @@ impl Ord for Channel {
             (Channel::Private(c), Channel::Private(d)) => c.cmp(d),
             (Channel::Private(_), Channel::User(_)) => std::cmp::Ordering::Greater,
             (Channel::Private(_), Channel::Group(_)) => std::cmp::Ordering::Less,
-            (Channel::User(_), Channel::Private(_)) =>std::cmp::Ordering::Less,
-            (Channel::User(c), Channel::User(d)) =>  c.cmp(d),
+            (Channel::User(_), Channel::Private(_)) => std::cmp::Ordering::Less,
+            (Channel::User(c), Channel::User(d)) => c.cmp(d),
             (Channel::User(_), Channel::Group(_)) => std::cmp::Ordering::Less,
         }
     }
-
 }
 
 pub enum ChatEvent {
@@ -121,7 +120,7 @@ impl UI for CursiveUI {
             .iter()
             .cloned()
             .map(|x| match x {
-                (repr, Channel::Group(_))  => (format!("#{}", repr), x.1),
+                (repr, Channel::Group(_)) => (format!("#{}", repr), x.1),
                 (repr, Channel::Private(_)) => (format!("🔒{}", repr), x.1),
                 (repr, Channel::User(_)) => (format!("ጰ{}", repr), x.1),
             })
@@ -140,7 +139,8 @@ impl UI for CursiveUI {
             .collect();
         self.cb_sink.send(Box::new(|siv: &mut Cursive| {
             siv.call_on_name("channel_list", move |view: &mut ChannelView| {
-                let selected = view.view
+                let selected = view
+                    .view
                     .selection()
                     .unwrap_or_else(|| Rc::new(Channel::Group("GENERAL".into())));
                 let index = chats
@@ -152,7 +152,8 @@ impl UI for CursiveUI {
                 view.view.set_selection(index);
             });
             siv.call_on_name("users_list", move |view: &mut ChannelView| {
-                let selected = view.view
+                let selected = view
+                    .view
                     .selection()
                     .unwrap_or_else(|| Rc::new(Channel::Group("GENERAL".into())));
                 let index = users

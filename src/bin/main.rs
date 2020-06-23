@@ -6,7 +6,7 @@ use cursive::{CbSink, Cursive};
 
 use log::{error, info};
 use oxychat::chats::RocketChat;
-use oxychat::views::{BufferView, MessageBoxView, ChannelView};
+use oxychat::views::{BufferView, ChannelView, MessageBoxView};
 use oxychat::Chat;
 use oxychat::{Channel, ChatEvent, CursiveUI};
 use std::error::Error;

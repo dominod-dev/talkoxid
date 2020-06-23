@@ -3,7 +3,7 @@ use cursive::event::{Event, EventResult, Key};
 use cursive::theme::{Color, ColorStyle, ColorType};
 use cursive::traits::*;
 use cursive::view::ViewWrapper;
-use cursive::views::{EditView, TextView, SelectView};
+use cursive::views::{EditView, SelectView, TextView};
 use cursive::wrap_impl;
 use cursive::{CbSink, Cursive};
 use std::error::Error;
@@ -92,8 +92,6 @@ impl<'a> ViewWrapper for BufferView {
         required_size
     }
 }
-
-
 
 pub struct ChannelView {
     pub view: SelectView<Channel>,
