@@ -11,7 +11,7 @@ use std::fmt;
 use std::rc::Rc;
 use views::{BufferView, MessageBoxView, ChannelView};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Message {
     pub author: String,
     pub content: String,
@@ -42,10 +42,11 @@ impl fmt::Display for Message {
     }
 }
 
-#[derive(Eq, PartialEq, Clone)]
+#[derive(Eq, PartialEq,PartialOrd, Clone, Debug)]
 pub enum Channel {
     Group(String),
     User(String),
+    Private(String),
 }
 
 impl fmt::Display for Channel {
@@ -53,8 +54,26 @@ impl fmt::Display for Channel {
         match self {
             Channel::Group(g) => write!(f, "{}", g),
             Channel::User(u) => write!(f, "{}", u),
+            Channel::Private(u) => write!(f, "{}", u),
         }
     }
+}
+
+impl Ord for Channel {
+    fn cmp(&self, b: &Self) -> std::cmp::Ordering {
+        match (self, b) {
+            (Channel::Group(_), Channel::Private(_)) => std::cmp::Ordering::Greater,
+            (Channel::Group(_), Channel::User(_)) => std::cmp::Ordering::Greater,
+            (Channel::Group(c), Channel::Group(d)) => c.cmp(d),
+            (Channel::Private(c), Channel::Private(d)) => c.cmp(d),
+            (Channel::Private(_), Channel::User(_)) => std::cmp::Ordering::Greater,
+            (Channel::Private(_), Channel::Group(_)) => std::cmp::Ordering::Less,
+            (Channel::User(_), Channel::Private(_)) =>std::cmp::Ordering::Less,
+            (Channel::User(c), Channel::User(d)) =>  c.cmp(d),
+            (Channel::User(_), Channel::Group(_)) => std::cmp::Ordering::Less,
+        }
+    }
+
 }
 
 pub enum ChatEvent {
@@ -98,17 +117,16 @@ impl UI for CursiveUI {
     }
 
     fn update_channels(&self, channels: Vec<(String, Channel)>) -> Result<(), Box<dyn Error>> {
-        let chats: Vec<(String, Channel)> = channels
+        let mut chats: Vec<(String, Channel)> = channels
             .iter()
             .cloned()
-            .filter(move |x| {
-                if let (_, Channel::Group(_)) = x {
-                    true
-                } else {
-                    false
-                }
+            .map(|x| match x {
+                (repr, Channel::Group(_))  => (format!("#{}", repr), x.1),
+                (repr, Channel::Private(_)) => (format!("🔒{}", repr), x.1),
+                (repr, Channel::User(_)) => (format!("ጰ{}", repr), x.1),
             })
             .collect();
+        chats.sort_by(|a, b| b.1.cmp(&a.1));
         let users: Vec<(String, Channel)> = channels
             .iter()
             .cloned()
@@ -131,9 +149,7 @@ impl UI for CursiveUI {
                     .unwrap_or_default();
                 view.view.clear();
                 view.view.add_all(chats);
-                if let Channel::Group(_) = *selected.as_ref() {
-                    view.view.set_selection(index);
-                }
+                view.view.set_selection(index);
             });
             siv.call_on_name("users_list", move |view: &mut ChannelView| {
                 let selected = view.view

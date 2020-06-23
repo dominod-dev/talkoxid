@@ -150,7 +150,7 @@ impl Chat for RocketChat {
                                     (name.clone(), Channel::Group(_id.clone()))
                                 }
                                 RoomResponseWs::Private(ChatResponseWs { _id, name }) => {
-                                    (name.clone(), Channel::Group(_id.clone()))
+                                    (name.clone(), Channel::Private(_id.clone()))
                                 }
                             })
                             .collect::<Vec<(String, Channel)>>();
