@@ -3,13 +3,13 @@ pub mod views;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use cursive::view::ScrollStrategy;
-use cursive::views::{NamedView, ScrollView, SelectView};
+use cursive::views::{NamedView, ScrollView};
 use cursive::{CbSink, Cursive};
 use log::error;
 use std::error::Error;
 use std::fmt;
 use std::rc::Rc;
-use views::{BufferView, MessageBoxView};
+use views::{BufferView, MessageBoxView, ChannelView};
 
 #[derive(Clone)]
 pub struct Message {
@@ -121,32 +121,32 @@ impl UI for CursiveUI {
             })
             .collect();
         self.cb_sink.send(Box::new(|siv: &mut Cursive| {
-            siv.call_on_name("channel_list", move |view: &mut SelectView<Channel>| {
-                let selected = view
+            siv.call_on_name("channel_list", move |view: &mut ChannelView| {
+                let selected = view.view
                     .selection()
                     .unwrap_or_else(|| Rc::new(Channel::Group("GENERAL".into())));
                 let index = chats
                     .iter()
                     .position(|x| &x.1 == selected.as_ref())
                     .unwrap_or_default();
-                view.clear();
-                view.add_all(chats);
+                view.view.clear();
+                view.view.add_all(chats);
                 if let Channel::Group(_) = *selected.as_ref() {
-                    view.set_selection(index);
+                    view.view.set_selection(index);
                 }
             });
-            siv.call_on_name("users_list", move |view: &mut SelectView<Channel>| {
-                let selected = view
+            siv.call_on_name("users_list", move |view: &mut ChannelView| {
+                let selected = view.view
                     .selection()
                     .unwrap_or_else(|| Rc::new(Channel::Group("GENERAL".into())));
                 let index = users
                     .iter()
                     .position(|x| &x.1 == selected.as_ref())
                     .unwrap_or_default();
-                view.clear();
-                view.add_all(users);
+                view.view.clear();
+                view.view.add_all(users);
                 if let Channel::User(_) = *selected.as_ref() {
-                    view.set_selection(index);
+                    view.view.set_selection(index);
                 }
             });
         }))?;

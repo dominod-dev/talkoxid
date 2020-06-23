@@ -1,12 +1,12 @@
 use async_channel::{bounded, unbounded};
 use cursive::traits::*;
 use cursive::view::ScrollStrategy;
-use cursive::views::{LinearLayout, SelectView, TextView};
+use cursive::views::{LinearLayout, TextView};
 use cursive::{CbSink, Cursive};
 
 use log::{error, info};
 use oxychat::chats::RocketChat;
-use oxychat::views::{BufferView, MessageBoxView};
+use oxychat::views::{BufferView, MessageBoxView, ChannelView};
 use oxychat::Chat;
 use oxychat::{Channel, ChatEvent, CursiveUI};
 use std::error::Error;
@@ -90,11 +90,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let message_input_box =
         MessageBoxView::new(None, tx.clone(), rt.handle().clone()).with_name("input");
 
-    let channel_list = SelectView::<Channel>::new()
+    let channel_list = ChannelView::new()
         .on_submit(on_channel_changed(tx.clone(), rt.handle().clone()))
         .with_name("channel_list")
         .scrollable();
-    let users_list = SelectView::<Channel>::new()
+    let users_list = ChannelView::new()
         .on_submit(on_channel_changed(tx.clone(), rt.handle().clone()))
         .with_name("users_list")
         .scrollable();

@@ -3,7 +3,7 @@ use cursive::event::{Event, EventResult, Key};
 use cursive::theme::{Color, ColorStyle, ColorType};
 use cursive::traits::*;
 use cursive::view::ViewWrapper;
-use cursive::views::{EditView, TextView};
+use cursive::views::{EditView, TextView, SelectView};
 use cursive::wrap_impl;
 use cursive::{CbSink, Cursive};
 use std::error::Error;
@@ -91,4 +91,25 @@ impl<'a> ViewWrapper for BufferView {
         required_size.x = size.x;
         required_size
     }
+}
+
+
+
+pub struct ChannelView {
+    pub view: SelectView<Channel>,
+}
+
+impl ChannelView {
+    pub fn new() -> Self {
+        let view = SelectView::new();
+        ChannelView { view }
+    }
+    pub fn on_submit(mut self, func: impl Fn(&mut Cursive, &Channel) + 'static) -> Self {
+        &self.view.set_on_submit(func);
+        self
+    }
+}
+
+impl<'a> ViewWrapper for ChannelView {
+    wrap_impl!(self.view: SelectView<Channel>);
 }
