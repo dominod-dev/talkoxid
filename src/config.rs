@@ -19,8 +19,8 @@ pub fn load_config(
     hostname: Option<&str>,
 ) -> ChatConfig {
     let mut config_path = dirs_next::config_dir().unwrap();
-    config_path.push("oxychat");
-    config_path.push("oxychat.toml");
+    config_path.push("talkoxid");
+    config_path.push("talkoxid.toml");
     let config_file = std::fs::read_to_string(config_path).unwrap_or_else(|_| String::from(""));
     let config: TomlConfig = toml::from_str(&config_file).expect("Corrupted config file");
 

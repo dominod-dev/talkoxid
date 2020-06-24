@@ -1,5 +1,5 @@
 [package]
-name = "oxychat"
+name = "talkoxid"
 version = "0.1.0"
 authors = ["Dominod <dev@dominod.fr>"]
 edition = "2018"
@@ -7,7 +7,7 @@ edition = "2018"
 [[bin]]
 bench = false
 path = "src/bin/main.rs"
-name = "oxychat"
+name = "talkoxid"
 
 [dependencies]
 serde_json = "1.0"

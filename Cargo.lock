@@ -1003,28 +1003,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "oxychat"
-version = "0.1.0"
-dependencies = [
- "async-channel",
- "async-trait",
- "chrono",
- "clap",
- "cursive",
- "dirs-next",
- "futures-util",
- "log",
- "log4rs",
- "serde",
- "serde_json",
- "sha2",
- "tokio",
- "tokio-tungstenite",
- "toml",
- "url",
-]
-
-[[package]]
 name = "parking_lot"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1382,6 +1360,28 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-xid",
+]
+
+[[package]]
+name = "talkoxid"
+version = "0.1.0"
+dependencies = [
+ "async-channel",
+ "async-trait",
+ "chrono",
+ "clap",
+ "cursive",
+ "dirs-next",
+ "futures-util",
+ "log",
+ "log4rs",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "tokio-tungstenite",
+ "toml",
+ "url",
 ]
 
 [[package]]
