@@ -101,7 +101,6 @@ impl RocketChatWsWriter {
         Ok(())
     }
 
-
     pub async fn send_message(
         &self,
         room_id: String,
@@ -181,6 +180,22 @@ impl RocketChatWsWriter {
             name: "stream-notify-user".into(),
             params: vec![
                 serde_json::json!(format!("{}/rooms-changed", &self.user_id)),
+                serde_json::json!(false),
+            ],
+        };
+        self.websocket
+            .send(tungstenite::Message::Text(serde_json::to_string(&sub)?))
+            .await?;
+        Ok(())
+    }
+
+    pub async fn subscribe_messages(&self) -> Result<(), Box<dyn Error>> {
+        let sub = SubStreamChannelWs {
+            msg: "sub".into(),
+            id: "7".into(),
+            name: "stream-room-messages".into(),
+            params: vec![
+                serde_json::json!("__my_messages__".to_string()),
                 serde_json::json!(false),
             ],
         };
