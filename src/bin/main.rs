@@ -28,8 +28,9 @@ async fn chat_loop(
     cb_sink: CbSink,
     config: ChatConfig,
 ) {
+    let cb_clone = cb_sink.clone();
     let ui = Box::new(CursiveUI::new(cb_sink));
-    let chat_system = RocketChat::new(
+    match RocketChat::new(
         Url::parse(&config.hostname).unwrap_or_else(|err| panic!("Bad url :{:?}", err)),
         config.username,
         config.password,
@@ -38,25 +39,42 @@ async fn chat_loop(
         rx,
     )
     .await
-    .unwrap_or_else(|err| panic!("Can't create chat system: {}", err));
-    chat_system
-        .init_view(Channel::Group("GENERAL".to_string()))
-        .await
-        .unwrap_or_else(|err| panic!("Can't init chat system: {}", err));
-    let read_loop = chat_system.wait_for_messages();
-    let ui_event_loop = chat_system.update_ui();
-    tokio::select! {
-        _ = ui_event_loop => {
-            error!("The chat event loop crashed!")
-        }
-        _ = read_loop => {
-            error!("The websocket loop crashed!")
-        }
+    {
+        Ok(chat_system) => {
+            chat_system
+                .init_view(Channel::Group("GENERAL".to_string()))
+                .await
+                .unwrap_or_else(|err| panic!("Can't init chat system: {}", err));
+            let read_loop = chat_system.wait_for_messages();
+            let ui_event_loop = chat_system.update_ui();
+            tokio::select! {
+                _ = ui_event_loop => {
+                    error!("The chat event loop crashed!")
+                }
+                _ = read_loop => {
+                    error!("The websocket loop crashed!")
+                }
 
-        _ = close_rx.recv() => {
-            info!("Disconnecting!")
+                _ = close_rx.recv() => {
+                    info!("Disconnecting!")
+                }
+            };
         }
-    };
+        Err(err) => {
+            let err = format!("{}", err);
+            cb_clone
+                .send(Box::new(move |siv: &mut Cursive| {
+                    siv.add_layer(
+                        cursive::views::Dialog::new()
+                            .title("Error")
+                            .content(TextView::new(format!("{:?}", err)))
+                            .button("Quit", |s| s.quit()),
+                    );
+                }))
+                .unwrap();
+            close_rx.recv().await.unwrap();
+        }
+    }
 }
 
 fn on_channel_changed(
@@ -96,7 +114,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let cb_sink = siv.cb_sink().clone();
     siv.add_global_callback('q', |s| s.quit());
-    siv.load_toml(include_str!("../../assets/style.toml")).unwrap();
+    siv.load_toml(include_str!("../../assets/style.toml"))
+        .unwrap();
     let buffer = BufferView::new(cb_sink.clone())
         .with_name("chat")
         .scrollable()
