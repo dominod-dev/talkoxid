@@ -1,15 +1,15 @@
 use async_channel::{bounded, unbounded};
+use clap::{load_yaml, App};
 use cursive::traits::*;
 use cursive::view::ScrollStrategy;
 use cursive::views::{LinearLayout, TextView};
 use cursive::{CbSink, Cursive};
-use clap::{App, load_yaml};
 
 use log::{error, info};
 use oxychat::chats::RocketChat;
 use oxychat::views::{BufferView, ChannelView, MessageBoxView};
-use oxychat::Chat;
 use oxychat::{Channel, ChatEvent, CursiveUI};
+use oxychat::{Chat, Config};
 use std::error::Error;
 use std::thread;
 use tokio::runtime::Runtime;
@@ -67,12 +67,27 @@ fn on_channel_changed(
 
 fn main() -> Result<(), Box<dyn Error>> {
     log4rs::init_file("config/log4rs.yaml", Default::default()).unwrap();
+    let f = std::fs::read_to_string("config.toml").unwrap_or("".to_string());
+    let config: Config = toml::from_str(&f).expect("Corrupted config file");
 
     let yaml = load_yaml!("../../config/cli.yaml");
     let matches = App::from_yaml(yaml).get_matches();
-    let username = matches.value_of("username").unwrap_or("admin").to_string();
-    let password = matches.value_of("password").unwrap_or("admin").to_string();
-    let hostname = matches.value_of("hostname").unwrap_or("http://localhost:3000").to_string();
+
+    let username = matches
+        .value_of("username")
+        .map(|x| x.to_string())
+        .or(config.username)
+        .expect("Error no username provided");
+    let password = matches
+        .value_of("password")
+        .map(|x| x.to_string())
+        .or(config.password)
+        .expect("Error no password provided");
+    let hostname = matches
+        .value_of("hostname")
+        .map(|x| x.to_string())
+        .or(config.hostname)
+        .expect("Error no hostname provided");
 
     let (tx, rx) = unbounded();
     let (close_tx, close_rx) = bounded(1);
@@ -85,7 +100,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     let cb_sink = siv.cb_sink().clone();
 
     let th = thread::spawn(move || {
-        handle.block_on(chat_loop(tx_cloned, rx, close_rx, cb_sink, username, password, hostname));
+        handle.block_on(chat_loop(
+            tx_cloned, rx, close_rx, cb_sink, username, password, hostname,
+        ));
     });
 
     let cb_sink = siv.cb_sink().clone();

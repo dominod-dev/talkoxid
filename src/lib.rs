@@ -6,10 +6,18 @@ use cursive::view::ScrollStrategy;
 use cursive::views::{NamedView, ScrollView};
 use cursive::{CbSink, Cursive};
 use log::error;
+use serde::Deserialize;
 use std::error::Error;
 use std::fmt;
 use std::rc::Rc;
 use views::{BufferView, ChannelView, MessageBoxView};
+
+#[derive(Deserialize, Debug)]
+pub struct Config {
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub hostname: Option<String>,
+}
 
 #[derive(Clone, Debug)]
 pub struct Message {
