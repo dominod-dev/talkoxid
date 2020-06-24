@@ -171,7 +171,6 @@ impl Chat for RocketChat {
                             .iter()
                             .cloned()
                             .map(|x| (x.username, x._id))
-                            .filter(|x| x.0 != self.username)
                             .collect::<Vec<(String, String)>>();
                         self.ui.update_users_in_room(users)?;
                     }
