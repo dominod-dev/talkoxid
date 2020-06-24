@@ -1,0 +1,23 @@
+name: oxychat
+version: "0.1"
+author: Dominod <info@dominod.fr>
+about: A Terminal UI chat supporting Rocket.Chat
+args:
+    - username:
+        short: u
+        long: username
+        value_name: USERNAME
+        help: Your username in the chat
+        takes_value: true
+    - password:
+        short: p
+        long: password
+        value_name: PASSWORD
+        help: Your password in the chat
+        takes_value: true
+    - host:
+        short: s
+        long: host
+        value_name: HOST
+        help: "Your chat hostname with port. Example: https://mychat.net:1234"
+        takes_value: true

@@ -3,6 +3,7 @@ use cursive::traits::*;
 use cursive::view::ScrollStrategy;
 use cursive::views::{LinearLayout, TextView};
 use cursive::{CbSink, Cursive};
+use clap::{App, load_yaml};
 
 use log::{error, info};
 use oxychat::chats::RocketChat;
@@ -19,12 +20,15 @@ async fn chat_loop(
     rx: async_channel::Receiver<ChatEvent>,
     close_rx: async_channel::Receiver<()>,
     cb_sink: CbSink,
+    username: String,
+    password: String,
+    hostname: String,
 ) {
     let ui = Box::new(CursiveUI::new(cb_sink));
     let chat_system = RocketChat::new(
-        Url::parse("http://localhost:3000/").unwrap_or_else(|err| panic!("Bad url :{:?}", err)),
-        "collkid".to_string(),
-        "collkid".to_string(),
+        Url::parse(&hostname).unwrap_or_else(|err| panic!("Bad url :{:?}", err)),
+        username,
+        password,
         ui,
         tx,
         rx,
@@ -64,6 +68,12 @@ fn on_channel_changed(
 fn main() -> Result<(), Box<dyn Error>> {
     log4rs::init_file("config/log4rs.yaml", Default::default()).unwrap();
 
+    let yaml = load_yaml!("../../config/cli.yaml");
+    let matches = App::from_yaml(yaml).get_matches();
+    let username = matches.value_of("username").unwrap_or("admin").to_string();
+    let password = matches.value_of("password").unwrap_or("admin").to_string();
+    let hostname = matches.value_of("hostname").unwrap_or("http://localhost:3000").to_string();
+
     let (tx, rx) = unbounded();
     let (close_tx, close_rx) = bounded(1);
     let tx_cloned = tx.clone();
@@ -75,7 +85,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let cb_sink = siv.cb_sink().clone();
 
     let th = thread::spawn(move || {
-        handle.block_on(chat_loop(tx_cloned, rx, close_rx, cb_sink));
+        handle.block_on(chat_loop(tx_cloned, rx, close_rx, cb_sink, username, password, hostname));
     });
 
     let cb_sink = siv.cb_sink().clone();
