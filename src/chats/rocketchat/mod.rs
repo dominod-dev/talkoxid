@@ -1,10 +1,11 @@
 pub mod api;
-use async_trait::async_trait;
 pub mod schema;
+
 use super::super::UI;
 use super::super::{Channel, Chat, ChatEvent, Message};
 use api::RocketChatWsWriter;
 use async_channel::{Receiver, Sender};
+use async_trait::async_trait;
 use futures_util::StreamExt;
 use log::error;
 use schema::*;

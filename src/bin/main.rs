@@ -1,19 +1,24 @@
 use async_channel::{bounded, unbounded};
+
 use clap::{load_yaml, App};
+
 use cursive::traits::*;
 use cursive::view::ScrollStrategy;
 use cursive::views::{LinearLayout, TextView};
 use cursive::{CbSink, Cursive};
 
 use log::{error, info};
+use std::error::Error;
+use std::thread;
+
 use talkoxid::chats::RocketChat;
 use talkoxid::config::{load_config, ChatConfig};
 use talkoxid::views::{BufferView, ChannelView, MessageBoxView};
 use talkoxid::Chat;
 use talkoxid::{Channel, ChatEvent, CursiveUI};
-use std::error::Error;
-use std::thread;
+
 use tokio::runtime::Runtime;
+
 use url::Url;
 
 async fn chat_loop(

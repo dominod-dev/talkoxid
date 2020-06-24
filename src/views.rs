@@ -1,4 +1,5 @@
 use async_channel::Sender;
+
 use cursive::event::{Event, EventResult, Key};
 use cursive::theme::{Color, ColorStyle, ColorType};
 use cursive::traits::*;
@@ -6,6 +7,7 @@ use cursive::view::ViewWrapper;
 use cursive::views::{EditView, SelectView, TextView};
 use cursive::wrap_impl;
 use cursive::{CbSink, Cursive};
+
 use std::error::Error;
 
 use super::{Channel, ChatEvent};

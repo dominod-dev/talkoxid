@@ -1,15 +1,21 @@
 pub mod chats;
 pub mod config;
 pub mod views;
+
 use async_trait::async_trait;
+
 use chrono::{DateTime, Utc};
+
 use cursive::view::ScrollStrategy;
 use cursive::views::{NamedView, ScrollView};
 use cursive::{CbSink, Cursive};
+
 use log::error;
+
 use std::error::Error;
 use std::fmt;
 use std::rc::Rc;
+
 use views::{BufferView, ChannelView, MessageBoxView};
 
 #[derive(Clone, Debug)]
