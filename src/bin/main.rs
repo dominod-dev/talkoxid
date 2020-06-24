@@ -96,8 +96,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let cb_sink = siv.cb_sink().clone();
     siv.add_global_callback('q', |s| s.quit());
-    siv.load_theme_file("assets/style.toml").unwrap();
-    // siv.load_toml(include_str!("../../assets/style.toml")).unwrap()
+    siv.load_toml(include_str!("../../assets/style.toml")).unwrap();
     let buffer = BufferView::new(cb_sink.clone())
         .with_name("chat")
         .scrollable()

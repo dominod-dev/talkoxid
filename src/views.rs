@@ -20,7 +20,6 @@ pub struct MessageBoxView {
 }
 
 impl MessageBoxView {
-    // Creates a new view with the given buffer size
     pub fn new(
         channel: Option<Channel>,
         tx: Sender<ChatEvent>,
