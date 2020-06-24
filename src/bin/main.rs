@@ -7,9 +7,10 @@ use cursive::{CbSink, Cursive};
 
 use log::{error, info};
 use oxychat::chats::RocketChat;
+use oxychat::config::{load_config, ChatConfig};
 use oxychat::views::{BufferView, ChannelView, MessageBoxView};
+use oxychat::Chat;
 use oxychat::{Channel, ChatEvent, CursiveUI};
-use oxychat::{Chat, Config};
 use std::error::Error;
 use std::thread;
 use tokio::runtime::Runtime;
@@ -20,15 +21,13 @@ async fn chat_loop(
     rx: async_channel::Receiver<ChatEvent>,
     close_rx: async_channel::Receiver<()>,
     cb_sink: CbSink,
-    username: String,
-    password: String,
-    hostname: String,
+    config: ChatConfig,
 ) {
     let ui = Box::new(CursiveUI::new(cb_sink));
     let chat_system = RocketChat::new(
-        Url::parse(&hostname).unwrap_or_else(|err| panic!("Bad url :{:?}", err)),
-        username,
-        password,
+        Url::parse(&config.hostname).unwrap_or_else(|err| panic!("Bad url :{:?}", err)),
+        config.username,
+        config.password,
         ui,
         tx,
         rx,
@@ -67,30 +66,14 @@ fn on_channel_changed(
 
 fn main() -> Result<(), Box<dyn Error>> {
     log4rs::init_file("config/log4rs.yaml", Default::default()).unwrap();
-    let mut config_path = dirs_next::config_dir().unwrap();
-    config_path.push("oxychat");
-    config_path.push("oxychat.toml");
-    let config_file = std::fs::read_to_string(config_path).unwrap_or_else(|_| String::from(""));
-    let config: Config = toml::from_str(&config_file).expect("Corrupted config file");
-
     let yaml = load_yaml!("../../config/cli.yaml");
     let matches = App::from_yaml(yaml).get_matches();
 
-    let username = matches
-        .value_of("username")
-        .map(|x| x.to_string())
-        .or(config.username)
-        .expect("Error no username provided");
-    let password = matches
-        .value_of("password")
-        .map(|x| x.to_string())
-        .or(config.password)
-        .expect("Error no password provided");
-    let hostname = matches
-        .value_of("hostname")
-        .map(|x| x.to_string())
-        .or(config.hostname)
-        .expect("Error no hostname provided");
+    let config = load_config(
+        matches.value_of("username"),
+        matches.value_of("password"),
+        matches.value_of("hostname"),
+    );
 
     let (tx, rx) = unbounded();
     let (close_tx, close_rx) = bounded(1);
@@ -103,9 +86,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let cb_sink = siv.cb_sink().clone();
 
     let th = thread::spawn(move || {
-        handle.block_on(chat_loop(
-            tx_cloned, rx, close_rx, cb_sink, username, password, hostname,
-        ));
+        handle.block_on(chat_loop(tx_cloned, rx, close_rx, cb_sink, config));
     });
 
     let cb_sink = siv.cb_sink().clone();
