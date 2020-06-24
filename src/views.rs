@@ -3,8 +3,8 @@ use async_channel::Sender;
 use cursive::event::{Event, EventResult, Key};
 use cursive::theme::{Color, ColorStyle, ColorType};
 use cursive::traits::*;
-use cursive::view::ViewWrapper;
-use cursive::views::{EditView, SelectView, TextView};
+use cursive::view::{ScrollStrategy, ViewWrapper};
+use cursive::views::{EditView, NamedView, ScrollView, SelectView, TextView};
 use cursive::wrap_impl;
 use cursive::{CbSink, Cursive};
 
@@ -75,6 +75,16 @@ impl BufferView {
     pub fn init(&mut self, content: String) -> Result<(), Box<dyn Error>> {
         self.view.set_content(content);
         self.cb_sink.send(Box::new(Cursive::noop))?;
+        self.cb_sink.send(Box::new(|siv: &mut Cursive| {
+            siv.call_on_name(
+                "scroll",
+                move |view: &mut NamedView<ScrollView<NamedView<BufferView>>>| {
+                    view.get_mut().scroll_to_bottom();
+                    view.get_mut()
+                        .set_scroll_strategy(ScrollStrategy::StickToBottom);
+                },
+            );
+        }))?;
         Ok(())
     }
 
