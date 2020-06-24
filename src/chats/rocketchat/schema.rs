@@ -2,69 +2,10 @@ use chrono::prelude::*;
 use chrono::serde::ts_milliseconds;
 
 use serde::{Deserialize, Serialize};
-
-#[derive(Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct AuthToken {
-    pub auth_token: String,
-    pub user_id: String,
-}
-
 #[derive(Deserialize, Debug)]
-pub struct LoginResponse {
-    pub data: AuthToken,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct ChannelResponse {
-    pub name: String,
-    pub _id: String,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct ChannelListResponse {
-    pub channels: Vec<ChannelResponse>,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct RoomResponse {
-    pub _id: String,
-    pub name: Option<String>,
-    pub usernames: Option<Vec<String>>,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct RoomsListResponse {
-    pub update: Vec<RoomResponse>,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct UserResponse {
-    pub name: String,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct UserListResponse {
-    pub users: Vec<UserResponse>,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct AuthorResponse {
+pub struct AuthorResponseWs {
     pub username: String,
 }
-
-#[derive(Deserialize, Debug)]
-pub struct MessageResponse {
-    pub u: AuthorResponse,
-    pub msg: String,
-    pub ts: String,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct ChannelHistoryResponse {
-    pub messages: Vec<MessageResponse>,
-}
-
 #[derive(Serialize, Debug)]
 pub struct UsernameWs {
     pub username: String,
@@ -109,6 +50,7 @@ pub enum LoadChannelHistoryParams {
     None,
 }
 
+#[derive(Serialize, Debug)]
 pub struct LoadChannelHistory {
     pub msg: String,
     pub method: String,
@@ -133,7 +75,7 @@ pub struct DateResponseWs {
 
 #[derive(Deserialize, Debug)]
 pub struct MessageResponseWs {
-    pub u: AuthorResponse,
+    pub u: AuthorResponseWs,
     pub rid: String,
     pub msg: String,
     pub ts: DateResponseWs,
