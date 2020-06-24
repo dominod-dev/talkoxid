@@ -67,8 +67,11 @@ fn on_channel_changed(
 
 fn main() -> Result<(), Box<dyn Error>> {
     log4rs::init_file("config/log4rs.yaml", Default::default()).unwrap();
-    let f = std::fs::read_to_string("config.toml").unwrap_or_else(|_| String::from(""));
-    let config: Config = toml::from_str(&f).expect("Corrupted config file");
+    let mut config_path = dirs_next::config_dir().unwrap();
+    config_path.push("oxychat");
+    config_path.push("oxychat.toml");
+    let config_file = std::fs::read_to_string(config_path).unwrap_or_else(|_| String::from(""));
+    let config: Config = toml::from_str(&config_file).expect("Corrupted config file");
 
     let yaml = load_yaml!("../../config/cli.yaml");
     let matches = App::from_yaml(yaml).get_matches();
