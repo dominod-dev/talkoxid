@@ -43,7 +43,7 @@ impl RocketChatWsWriter {
         let login = LoginWs {
             msg: "method".into(),
             method: "login".into(),
-            id: "42".into(),
+            id: "1".into(),
             params: vec![LoginParamsWs {
                 user: UsernameWs {
                     username: username.into(),
@@ -64,7 +64,7 @@ impl RocketChatWsWriter {
         let login = LoginWs {
             msg: "method".into(),
             method: "login".into(),
-            id: "42".into(),
+            id: "1".into(),
             params: vec![LoginParamsWs {
                 user: UsernameWs {
                     username: self.username.clone(),
@@ -101,21 +101,6 @@ impl RocketChatWsWriter {
         Ok(())
     }
 
-    pub async fn subscribe_user(&self) -> Result<(), Box<dyn Error>> {
-        let sub = SubStreamChannelWs {
-            msg: "sub".into(),
-            id: "1234".into(),
-            name: "stream-notify-user".into(),
-            params: vec![
-                serde_json::json!(format!("{}/rooms-changed", &self.user_id)),
-                serde_json::json!(false),
-            ],
-        };
-        self.websocket
-            .send(tungstenite::Message::Text(serde_json::to_string(&sub)?))
-            .await?;
-        Ok(())
-    }
 
     pub async fn send_message(
         &self,
@@ -127,7 +112,7 @@ impl RocketChatWsWriter {
             {{
                 "msg": "method",
                 "method": "sendMessage",
-                "id": "42",
+                "id": "2",
                 "params": [
                     {{
                         "rid": "{}",
@@ -148,7 +133,7 @@ impl RocketChatWsWriter {
             {{
                 "msg": "method",
                 "method": "loadHistory",
-                "id": "42",
+                "id": "3",
                 "params": [ "{}", null, {}, null ]
             }}
         "#,
@@ -163,7 +148,7 @@ impl RocketChatWsWriter {
             {
                 "msg": "method",
                 "method": "rooms/get",
-                "id": "42",
+                "id": "4",
                 "params": [ { "$date": 0 } ]
             }
         "#;
@@ -179,13 +164,29 @@ impl RocketChatWsWriter {
             {{
                 "msg": "method",
                 "method": "createDirectMessage",
-                "id": "42",
+                "id": "5",
                 "params": ["{}"]
             }}
         "#,
             username
         );
         self.websocket.send(tungstenite::Message::Text(msg)).await?;
+        Ok(())
+    }
+
+    pub async fn subscribe_user(&self) -> Result<(), Box<dyn Error>> {
+        let sub = SubStreamChannelWs {
+            msg: "sub".into(),
+            id: "6".into(),
+            name: "stream-notify-user".into(),
+            params: vec![
+                serde_json::json!(format!("{}/rooms-changed", &self.user_id)),
+                serde_json::json!(false),
+            ],
+        };
+        self.websocket
+            .send(tungstenite::Message::Text(serde_json::to_string(&sub)?))
+            .await?;
         Ok(())
     }
 }

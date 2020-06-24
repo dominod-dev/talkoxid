@@ -112,7 +112,7 @@ impl Chat for RocketChat {
                             ))
                             .await?;
                     }
-                    WsResponse::History { result, .. } => {
+                    WsResponse::History { id, result, .. } if id == "3" => {
                         let messages =
                             result.messages.iter().rev().fold(String::from(""), |x, y| {
                                 format!(
@@ -128,7 +128,7 @@ impl Chat for RocketChat {
                         self.ui.update_messages(messages)?;
                     }
 
-                    WsResponse::Rooms { result, .. } => {
+                    WsResponse::Rooms { id, result, .. } if id == "4" => {
                         let channels = result
                             .update
                             .iter()
@@ -157,7 +157,7 @@ impl Chat for RocketChat {
                             .collect::<Vec<(String, Channel)>>();
                         self.ui.update_channels(channels)?
                     }
-                    WsResponse::JoinedRoom { result, .. } => {
+                    WsResponse::JoinedRoom { id, result, .. } if id == "5" => {
                         self.ui_tx
                             .send(ChatEvent::Init(Channel::Group(result.rid)))
                             .await?;

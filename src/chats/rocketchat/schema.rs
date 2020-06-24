@@ -101,6 +101,7 @@ pub struct SocketArgsWs {
 
 #[derive(Deserialize, Debug)]
 pub struct SocketMessageWs {
+    pub id: String,
     pub msg: String,
     pub fields: SocketArgsWs,
 }
