@@ -185,9 +185,7 @@ impl RocketChatWsWriter {
         "#,
             username
         );
-        self.websocket
-            .send(tungstenite::Message::Text(msg.into()))
-            .await?;
+        self.websocket.send(tungstenite::Message::Text(msg)).await?;
         Ok(())
     }
 }

@@ -138,12 +138,12 @@ impl Chat for RocketChat {
                                         .cloned()
                                         .filter(|x| x != &self.username)
                                         .collect::<Vec<String>>();
-                                    if username.len() <= 1 && usernames.len() > 0 {
+                                    if username.len() <= 1 && !usernames.is_empty() {
                                         let username = username.get(0).unwrap_or(&self.username);
                                         (username.into(), Channel::User(_id.clone()))
                                     } else {
                                         let all_usernames = username.join(",");
-                                        (all_usernames.into(), Channel::User(_id.clone()))
+                                        (all_usernames, Channel::User(_id.clone()))
                                     }
                                 }
                                 RoomResponseWs::Chat(ChatResponseWs { _id, name }) => {
@@ -174,7 +174,7 @@ impl Chat for RocketChat {
         loop {
             match self.ui_rx.recv().await {
                 Ok(ChatEvent::SendMessage(message, channel)) => {
-                    let split = message.split(" ").collect::<Vec<&str>>();
+                    let split = message.split(' ').collect::<Vec<&str>>();
                     if message.starts_with("/direct") && split.len() > 1 {
                         self.ws.create_direct_chat(split[1].into()).await?;
                     } else {

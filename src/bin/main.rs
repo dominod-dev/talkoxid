@@ -67,7 +67,7 @@ fn on_channel_changed(
 
 fn main() -> Result<(), Box<dyn Error>> {
     log4rs::init_file("config/log4rs.yaml", Default::default()).unwrap();
-    let f = std::fs::read_to_string("config.toml").unwrap_or("".to_string());
+    let f = std::fs::read_to_string("config.toml").unwrap_or_else(|_| String::from(""));
     let config: Config = toml::from_str(&f).expect("Corrupted config file");
 
     let yaml = load_yaml!("../../config/cli.yaml");
@@ -122,7 +122,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .with_name("channel_list")
         .scrollable();
     let users_list = ChannelView::new()
-        .on_submit(on_channel_changed(tx.clone(), rt.handle().clone()))
+        .on_submit(on_channel_changed(tx, rt.handle().clone()))
         .with_name("users_list")
         .scrollable();
     let channels = LinearLayout::vertical()

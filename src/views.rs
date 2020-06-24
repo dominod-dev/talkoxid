@@ -93,6 +93,7 @@ impl<'a> ViewWrapper for BufferView {
     }
 }
 
+#[derive(Default)]
 pub struct ChannelView {
     pub view: SelectView<Channel>,
 }
@@ -103,7 +104,7 @@ impl ChannelView {
         ChannelView { view }
     }
     pub fn on_submit(mut self, func: impl Fn(&mut Cursive, &Channel) + 'static) -> Self {
-        &self.view.set_on_submit(func);
+        self.view.set_on_submit(func);
         self
     }
 }
