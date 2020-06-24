@@ -4,7 +4,7 @@ use clap::{load_yaml, App};
 
 use cursive::traits::*;
 use cursive::view::ScrollStrategy;
-use cursive::views::{LinearLayout, TextView};
+use cursive::views::{LinearLayout, SelectView, TextView};
 use cursive::{CbSink, Cursive};
 
 use log::{error, info};
@@ -107,11 +107,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         MessageBoxView::new(None, tx.clone(), rt.handle().clone()).with_name("input");
 
     let channel_list = ChannelView::new()
-        .on_submit(on_channel_changed(tx.clone(), rt.handle().clone()))
+        .on_submit(on_channel_changed(tx, rt.handle().clone()))
         .with_name("channel_list")
         .scrollable();
-    let users_list = ChannelView::new()
-        .on_submit(on_channel_changed(tx, rt.handle().clone()))
+    let users_list = SelectView::<String>::new()
         .with_name("users_list")
         .scrollable();
     let channels = LinearLayout::vertical()

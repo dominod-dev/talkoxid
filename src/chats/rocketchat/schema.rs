@@ -2,8 +2,9 @@ use chrono::prelude::*;
 use chrono::serde::ts_milliseconds;
 
 use serde::{Deserialize, Serialize};
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct AuthorResponseWs {
+    pub _id: String,
     pub username: String,
 }
 #[derive(Serialize, Debug)]
@@ -146,6 +147,18 @@ pub struct JoinedRoomResponseWs {
 }
 
 #[derive(Deserialize, Debug)]
+pub struct UserInRoomResponseWs {
+    pub total: usize,
+    pub record: Vec<serde_json::value::Value>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct UsersInRoomResponseWs {
+    pub total: usize,
+    pub records: Vec<AuthorResponseWs>,
+}
+
+#[derive(Deserialize, Debug)]
 #[serde(untagged)]
 pub enum WsResponse {
     NewMessage(SocketMessageWs),
@@ -163,6 +176,11 @@ pub enum WsResponse {
         msg: String,
         id: String,
         result: JoinedRoomResponseWs,
+    },
+    UsersInRoom {
+        msg: String,
+        id: String,
+        result: UsersInRoomResponseWs,
     },
     Ping {
         msg: String,

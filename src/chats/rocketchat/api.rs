@@ -204,4 +204,28 @@ impl RocketChatWsWriter {
             .await?;
         Ok(())
     }
+
+    pub async fn get_users_room(&self, room_id: String) -> Result<(), Box<dyn Error>> {
+        let msg = format!(
+            r#"
+        {{
+            "msg": "method",
+            "method": "getUsersOfRoom",
+            "params": [
+                "{}",
+                true,
+                {{
+                  "limit": 100,
+                  "skip": 0
+                }},
+                ""
+            ],
+            "id": "8"
+        }}
+        "#,
+            room_id
+        );
+        self.websocket.send(tungstenite::Message::Text(msg)).await?;
+        Ok(())
+    }
 }

@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
 use cursive::view::ScrollStrategy;
-use cursive::views::{NamedView, ScrollView};
+use cursive::views::{NamedView, ScrollView, SelectView};
 use cursive::{CbSink, Cursive};
 
 use log::error;
@@ -100,6 +100,7 @@ pub trait Chat {
 pub trait UI {
     fn update_messages(&self, content: String) -> Result<(), Box<dyn Error>>;
     fn update_channels(&self, channels: Vec<(String, Channel)>) -> Result<(), Box<dyn Error>>;
+    fn update_users_in_room(&self, users: Vec<(String, String)>) -> Result<(), Box<dyn Error>>;
     fn add_message(&self, message: Message) -> Result<(), Box<dyn Error>>;
     fn select_channel(&self, channel: Channel) -> Result<(), Box<dyn Error>>;
 }
@@ -133,17 +134,6 @@ impl UI for CursiveUI {
             })
             .collect();
         chats.sort_by(|a, b| b.1.cmp(&a.1));
-        let users: Vec<(String, Channel)> = channels
-            .iter()
-            .cloned()
-            .filter(move |x| {
-                if let (_, Channel::User(_)) = x {
-                    true
-                } else {
-                    false
-                }
-            })
-            .collect();
         self.cb_sink.send(Box::new(|siv: &mut Cursive| {
             siv.call_on_name("channel_list", move |view: &mut ChannelView| {
                 let selected = view
@@ -158,20 +148,15 @@ impl UI for CursiveUI {
                 view.view.add_all(chats);
                 view.view.set_selection(index);
             });
-            siv.call_on_name("users_list", move |view: &mut ChannelView| {
-                let selected = view
-                    .view
-                    .selection()
-                    .unwrap_or_else(|| Rc::new(Channel::Group("GENERAL".into())));
-                let index = users
-                    .iter()
-                    .position(|x| &x.1 == selected.as_ref())
-                    .unwrap_or_default();
-                view.view.clear();
-                view.view.add_all(users);
-                if let Channel::User(_) = *selected.as_ref() {
-                    view.view.set_selection(index);
-                }
+        }))?;
+        Ok(())
+    }
+
+    fn update_users_in_room(&self, users: Vec<(String, String)>) -> Result<(), Box<dyn Error>> {
+        self.cb_sink.send(Box::new(|siv: &mut Cursive| {
+            siv.call_on_name("users_list", move |view: &mut SelectView<String>| {
+                view.clear();
+                view.add_all(users);
             });
         }))?;
         Ok(())

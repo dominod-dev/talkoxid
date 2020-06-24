@@ -85,6 +85,9 @@ impl Chat for RocketChat {
             .await?;
         self.ws.load_rooms().await?;
         self.ws.subscribe_user().await?;
+        self.ws
+            .get_users_room(format!("{}", channel_to_switch))
+            .await?;
         self.ui.select_channel(channel_to_switch)?;
         Ok(())
     }
@@ -161,6 +164,16 @@ impl Chat for RocketChat {
                         self.ui_tx
                             .send(ChatEvent::Init(Channel::Group(result.rid)))
                             .await?;
+                    }
+                    WsResponse::UsersInRoom { id, result, .. } if id == "8" => {
+                        let users = result
+                            .records
+                            .iter()
+                            .cloned()
+                            .map(|x| (x.username, x._id))
+                            .filter(|x| x.0 != self.username)
+                            .collect::<Vec<(String, String)>>();
+                        self.ui.update_users_in_room(users)?;
                     }
                     WsResponse::Ping { msg } if msg == "ping" => {
                         self.ponger.send(r#"{"msg": "pong"}"#.into()).await?;
