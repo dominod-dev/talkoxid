@@ -7,7 +7,11 @@ use tokio_tungstenite::tungstenite;
 
 #[async_trait]
 pub trait WebSocketWriter {
-    async fn init(username: &str, password_digest: &str, websocket: &Sender<tungstenite::Message>) -> Result<(), Box<dyn Error>>;
+    async fn init(
+        username: &str,
+        password_digest: &str,
+        websocket: &Sender<tungstenite::Message>,
+    ) -> Result<(), Box<dyn Error>>;
 
     async fn login(&self) -> Result<(), Box<dyn Error>>;
 
@@ -123,11 +127,7 @@ impl WebSocketWriter for RocketChatWsWriter {
         Ok(())
     }
 
-    async fn send_message(
-        &self,
-        room_id: String,
-        content: String,
-    ) -> Result<(), Box<dyn Error>> {
+    async fn send_message(&self, room_id: String, content: String) -> Result<(), Box<dyn Error>> {
         let msg = format!(
             r#"
             {{
@@ -249,5 +249,243 @@ impl WebSocketWriter for RocketChatWsWriter {
         );
         self.websocket.send(tungstenite::Message::Text(msg)).await?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_channel::unbounded;
+    use serde_json::Value;
+
+    fn compare_json(a: &str, b: &str) {
+        assert_eq!(
+            serde_json::from_str::<Value>(a).unwrap(),
+            serde_json::from_str::<Value>(b).unwrap()
+        )
+    }
+
+    async fn create_fake_websocket() -> (RocketChatWsWriter, Receiver<tungstenite::Message>) {
+        let (tx, rx) = unbounded();
+        tx.send(tungstenite::Message::Text("ok".into()))
+            .await
+            .unwrap();
+        tx.send(tungstenite::Message::Text("connect".into()))
+            .await
+            .unwrap();
+        tx.send(tungstenite::Message::Text(r#"{"id": "idtest"}"#.into()))
+            .await
+            .unwrap();
+        let ws = RocketChatWsWriter::new("usertest".into(), "passtest".into(), tx, &rx)
+            .await
+            .unwrap();
+        compare_json(
+            &rx.recv().await.unwrap().to_string(),
+            r#"{"msg":"connect","version":"1","support":["1"]}"#,
+        );
+
+        compare_json(
+            &rx.recv().await.unwrap().to_string(),
+            r#"
+            {
+              "msg": "method",
+              "method": "login",
+              "params": [
+                {
+                  "user": {
+                    "username": "usertest"
+                  },
+                  "password": {
+                    "digest": "b2e6c8f71c847dd0ebc643ca01e2f367d53ff060a8021e7ca1f23f3879e6c0a6",
+                    "algorithm": "sha-256"
+                  }
+                }
+              ],
+              "id": "1"
+            }
+            "#,
+        );
+        (ws, rx)
+    }
+
+    #[tokio::test]
+    async fn test_init() {
+        create_fake_websocket().await;
+    }
+
+    #[tokio::test]
+    async fn test_login() {
+        let (ws, rx) = create_fake_websocket().await;
+        ws.login().await.unwrap();
+        compare_json(
+            &rx.recv().await.unwrap().to_string(),
+            r#"
+            {
+              "msg": "method",
+              "method": "login",
+              "params": [
+                {
+                  "user": {
+                    "username": "usertest"
+                  },
+                  "password": {
+                    "digest": "b2e6c8f71c847dd0ebc643ca01e2f367d53ff060a8021e7ca1f23f3879e6c0a6",
+                    "algorithm": "sha-256"
+                  }
+                }
+              ],
+              "id": "1"
+            }
+            "#,
+        );
+    }
+
+    #[tokio::test]
+    async fn test_pong() {
+        let (ws, rx) = create_fake_websocket().await;
+        ws.pong().await.unwrap();
+        compare_json(
+            &rx.recv().await.unwrap().to_string(),
+            r#"
+            {
+              "msg": "pong"
+            }
+            "#,
+        );
+    }
+
+    #[tokio::test]
+    async fn test_send_message() {
+        let (ws, rx) = create_fake_websocket().await;
+        ws.send_message("roomtest".into(), "contenttest".into())
+            .await
+            .unwrap();
+        compare_json(
+            &rx.recv().await.unwrap().to_string(),
+            r#"
+            {
+                "msg": "method",
+                "method": "sendMessage",
+                "id": "2",
+                "params": [
+                    {
+                        "rid": "roomtest",
+                        "msg": "contenttest"
+                    }
+                ]
+            }
+            "#,
+        );
+    }
+
+    #[tokio::test]
+    async fn test_load_history() {
+        let (ws, rx) = create_fake_websocket().await;
+        ws.load_history("roomtest".into(), 100).await.unwrap();
+        compare_json(
+            &rx.recv().await.unwrap().to_string(),
+            r#"
+            {
+                "msg": "method",
+                "method": "loadHistory",
+                "id": "3",
+                "params": [ "roomtest", null, 100, null ]
+            }
+            "#,
+        );
+    }
+
+    #[tokio::test]
+    async fn test_load_rooms() {
+        let (ws, rx) = create_fake_websocket().await;
+        ws.load_rooms().await.unwrap();
+        compare_json(
+            &rx.recv().await.unwrap().to_string(),
+            r#"
+            {
+                "msg": "method",
+                "method": "rooms/get",
+                "id": "4",
+                "params": [ { "$date": 0 } ]
+            }
+            "#,
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_direct_chat() {
+        let (ws, rx) = create_fake_websocket().await;
+        ws.create_direct_chat("usertest".into()).await.unwrap();
+        compare_json(
+            &rx.recv().await.unwrap().to_string(),
+            r#"
+            {
+                "msg": "method",
+                "method": "createDirectMessage",
+                "id": "5",
+                "params": ["usertest"]
+            }
+            "#,
+        );
+    }
+
+    #[tokio::test]
+    async fn test_subscribe_user() {
+        let (ws, rx) = create_fake_websocket().await;
+        ws.subscribe_user().await.unwrap();
+        compare_json(
+            &rx.recv().await.unwrap().to_string(),
+            r#"
+            {
+                "msg": "sub",
+                "name": "stream-notify-user",
+                "id": "6",
+                "params": ["idtest/rooms-changed", false]
+            }
+            "#,
+        );
+    }
+
+    #[tokio::test]
+    async fn test_subscribe_messages() {
+        let (ws, rx) = create_fake_websocket().await;
+        ws.subscribe_messages().await.unwrap();
+        compare_json(
+            &rx.recv().await.unwrap().to_string(),
+            r#"
+            {
+                "msg": "sub",
+                "name": "stream-room-messages",
+                "id": "7",
+                "params": ["__my_messages__", false]
+            }
+            "#,
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get_user_room() {
+        let (ws, rx) = create_fake_websocket().await;
+        ws.get_users_room("roomtest".into()).await.unwrap();
+        compare_json(
+            &rx.recv().await.unwrap().to_string(),
+            r#"
+
+            {
+                "msg": "method",
+                "method": "getUsersOfRoom",
+                "params": [
+                    "roomtest",
+                    true,
+                    {
+                      "limit": 100,
+                      "skip": 0
+                    },
+                    ""
+                ],
+                "id": "8"
+            }
+            "#,
+        );
     }
 }
