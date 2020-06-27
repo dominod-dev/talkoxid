@@ -105,6 +105,20 @@ pub trait UI {
     fn select_channel(&self, channel: Channel) -> Result<(), Box<dyn Error>>;
 }
 
+fn format_channel(channels: Vec<(String, Channel)>) -> Vec<(String, Channel)> {
+    let mut chats: Vec<(String, Channel)> = channels
+        .iter()
+        .cloned()
+        .map(|x| match x {
+            (repr, Channel::Group(_)) => (format!("#{}", repr), x.1),
+            (repr, Channel::Private(_)) => (format!("🔒{}", repr), x.1),
+            (repr, Channel::User(_)) => (format!("ጰ{}", repr), x.1),
+        })
+        .collect();
+    chats.sort_by(|a, b| b.1.cmp(&a.1));
+    chats
+}
+
 pub struct CursiveUI {
     cb_sink: CbSink,
 }
@@ -124,16 +138,7 @@ impl UI for CursiveUI {
     }
 
     fn update_channels(&self, channels: Vec<(String, Channel)>) -> Result<(), Box<dyn Error>> {
-        let mut chats: Vec<(String, Channel)> = channels
-            .iter()
-            .cloned()
-            .map(|x| match x {
-                (repr, Channel::Group(_)) => (format!("#{}", repr), x.1),
-                (repr, Channel::Private(_)) => (format!("🔒{}", repr), x.1),
-                (repr, Channel::User(_)) => (format!("ጰ{}", repr), x.1),
-            })
-            .collect();
-        chats.sort_by(|a, b| b.1.cmp(&a.1));
+        let chats = format_channel(channels);
         self.cb_sink.send(Box::new(|siv: &mut Cursive| {
             siv.call_on_name("channel_list", move |view: &mut ChannelView| {
                 let selected = view
@@ -187,5 +192,38 @@ impl UI for CursiveUI {
             });
         }))?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_format_channels() {
+        let channels = vec![
+            ("test_pub".to_string(), Channel::Group("test_pub_id".into())),
+            (
+                "test_priv".to_string(),
+                Channel::Private("test_priv_id".into()),
+            ),
+            (
+                "test_direct".to_string(),
+                Channel::User("test_direct_id".into()),
+            ),
+        ];
+        assert_eq!(
+            format_channel(channels),
+            vec![
+                ("#test_pub".into(), Channel::Group("test_pub_id".into())),
+                (
+                    "🔒test_priv".to_string(),
+                    Channel::Private("test_priv_id".into())
+                ),
+            (
+                "ጰtest_direct".to_string(),
+                Channel::User("test_direct_id".into()),
+            ),
+            ]
+        );
     }
 }
