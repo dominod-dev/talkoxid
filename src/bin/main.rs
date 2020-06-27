@@ -29,7 +29,7 @@ async fn chat_loop(
     config: ChatConfig,
 ) {
     let cb_clone = cb_sink.clone();
-    let ui = Box::new(CursiveUI::new(cb_sink));
+    let ui = CursiveUI::new(cb_sink);
     match RocketChat::new(
         Url::parse(&config.hostname).unwrap_or_else(|err| panic!("Bad url :{:?}", err)),
         config.username,

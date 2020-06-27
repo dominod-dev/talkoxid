@@ -3,7 +3,7 @@ pub mod schema;
 
 use super::super::UI;
 use super::super::{Channel, Chat, ChatEvent, Message};
-use api::RocketChatWsWriter;
+use api::{RocketChatWsWriter, WebSocketWriter};
 use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
 use futures_util::StreamExt;
@@ -13,9 +13,9 @@ use std::error::Error;
 use tokio_tungstenite::tungstenite;
 use url::Url;
 
-pub struct RocketChat {
-    ui: Box<dyn UI + Send + Sync>,
-    ws: api::RocketChatWsWriter,
+pub struct RocketChat<T: UI + Sync + Send, U: WebSocketWriter + Send + Sync> {
+    ui: T,
+    ws: U,
     ws_reader: Receiver<tungstenite::Message>,
     ui_tx: Sender<ChatEvent>,
     ponger: Sender<tungstenite::Message>,
@@ -23,12 +23,12 @@ pub struct RocketChat {
     username: String,
 }
 
-impl RocketChat {
+impl<T> RocketChat<T, RocketChatWsWriter> where T: UI + Send + Sync {
     pub async fn new(
         host: Url,
         username: String,
         password: String,
-        ui: Box<dyn UI + Send + Sync>,
+        ui: T,
         ui_tx: Sender<ChatEvent>,
         ui_rx: Receiver<ChatEvent>,
     ) -> Result<Self, Box<dyn Error>> {
@@ -77,7 +77,7 @@ impl RocketChat {
     }
 }
 #[async_trait]
-impl Chat for RocketChat {
+impl<T, U> Chat for RocketChat<T, U> where T: UI + Send + Sync, U: WebSocketWriter + Send + Sync {
     async fn init_view(&self, channel: Channel) -> Result<(), Box<dyn Error>> {
         let channel_to_switch = channel.clone();
         self.ws
