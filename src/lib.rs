@@ -219,10 +219,10 @@ mod tests {
                     "🔒test_priv".to_string(),
                     Channel::Private("test_priv_id".into())
                 ),
-            (
-                "ጰtest_direct".to_string(),
-                Channel::User("test_direct_id".into()),
-            ),
+                (
+                    "ጰtest_direct".to_string(),
+                    Channel::User("test_direct_id".into()),
+                ),
             ]
         );
     }

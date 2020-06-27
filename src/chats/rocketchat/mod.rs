@@ -23,7 +23,10 @@ pub struct RocketChat<T: UI + Sync + Send, U: WebSocketWriter + Send + Sync> {
     username: String,
 }
 
-impl<T> RocketChat<T, RocketChatWsWriter> where T: UI + Send + Sync {
+impl<T> RocketChat<T, RocketChatWsWriter>
+where
+    T: UI + Send + Sync,
+{
     pub async fn new(
         host: Url,
         username: String,
@@ -77,7 +80,11 @@ impl<T> RocketChat<T, RocketChatWsWriter> where T: UI + Send + Sync {
     }
 }
 #[async_trait]
-impl<T, U> Chat for RocketChat<T, U> where T: UI + Send + Sync, U: WebSocketWriter + Send + Sync {
+impl<T, U> Chat for RocketChat<T, U>
+where
+    T: UI + Send + Sync,
+    U: WebSocketWriter + Send + Sync,
+{
     async fn init_view(&self, channel: Channel) -> Result<(), Box<dyn Error>> {
         let channel_to_switch = channel.clone();
         self.ws
