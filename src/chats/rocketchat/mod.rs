@@ -217,3 +217,158 @@ where
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::super::CursiveUI;
+    use super::*;
+    use async_trait::async_trait;
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex};
+    #[derive(Clone)]
+    struct FakeWsWriter {
+        call_map: Arc<Mutex<HashMap<String, usize>>>,
+    }
+    #[async_trait]
+    impl WebSocketWriter for FakeWsWriter {
+        async fn init(
+            _username: &str,
+            _password_digest: &str,
+            _websocket: &Sender<tungstenite::Message>,
+        ) -> Result<(), Box<dyn Error>> {
+            Ok(())
+        }
+
+        async fn login(&self) -> Result<(), Box<dyn Error>> {
+            let mut call_map = self.call_map.lock().unwrap();
+            let current_count = *call_map.get("login").unwrap();
+            call_map.insert("login".into(), current_count + 1);
+            Ok(())
+        }
+
+        async fn connect(_writer: &Sender<tungstenite::Message>) -> Result<(), Box<dyn Error>> {
+            Ok(())
+        }
+
+        async fn pong(&self) -> Result<(), Box<dyn Error>> {
+            Ok(())
+        }
+        async fn send_message(
+            &self,
+            _room_id: String,
+            _content: String,
+        ) -> Result<(), Box<dyn Error>> {
+            let mut call_map = self.call_map.lock().unwrap();
+            let current_count = *call_map
+                .get("send_message")
+                .or(Some(&(0 as usize)))
+                .unwrap();
+            call_map.insert("send_message".into(), current_count + 1);
+            Ok(())
+        }
+        async fn load_history(
+            &self,
+            _room_id: String,
+            _count: usize,
+        ) -> Result<(), Box<dyn Error>> {
+            Ok(())
+        }
+        async fn load_rooms(&self) -> Result<(), Box<dyn Error>> {
+            Ok(())
+        }
+        async fn create_direct_chat(&self, _username: String) -> Result<(), Box<dyn Error>> {
+            Ok(())
+        }
+        async fn subscribe_user(&self) -> Result<(), Box<dyn Error>> {
+            Ok(())
+        }
+        async fn subscribe_messages(&self) -> Result<(), Box<dyn Error>> {
+            Ok(())
+        }
+        async fn get_users_room(&self, _room_id: String) -> Result<(), Box<dyn Error>> {
+            Ok(())
+        }
+    }
+
+    impl<T> RocketChat<T, FakeWsWriter>
+    where
+        T: UI + Send + Sync,
+    {
+        pub fn new(
+            host: Url,
+            username: String,
+            ui: T,
+            ui_tx: Sender<ChatEvent>,
+            ui_rx: Receiver<ChatEvent>,
+            ws: FakeWsWriter,
+        ) -> Result<
+            (
+                Self,
+                Receiver<tungstenite::Message>,
+                Sender<tungstenite::Message>,
+            ),
+            Box<dyn Error>,
+        > {
+            let mut ws_host = host.clone();
+            ws_host
+                .set_scheme("ws")
+                .map_err(|err| format!("{:?}", err))?;
+            ws_host.set_path("/websocket");
+            let (ws_writer, rxws) = async_channel::unbounded();
+            let ponger = ws_writer.clone();
+            let (txws, ws_reader) = async_channel::unbounded();
+            Ok((
+                RocketChat {
+                    ui,
+                    ws,
+                    ws_reader,
+                    ui_tx,
+                    ponger,
+                    ui_rx,
+                    username,
+                },
+                rxws,
+                txws,
+            ))
+        }
+    }
+
+    fn create_chat_system() -> (
+        FakeWsWriter,
+        RocketChat<CursiveUI, FakeWsWriter>,
+        Receiver<tungstenite::Message>,
+        Sender<tungstenite::Message>,
+    ) {
+        let ws = FakeWsWriter {
+            call_map: Arc::new(Mutex::new(HashMap::new())),
+        };
+        let cloned = ws.clone();
+        let (tx, rx) = async_channel::unbounded();
+        let (chat, rxws, txws) = RocketChat::<CursiveUI, FakeWsWriter>::new(
+            Url::parse("http://localhost").unwrap(),
+            "usertest".into(),
+            CursiveUI::new(cursive::dummy().cb_sink().clone()),
+            tx,
+            rx,
+            ws,
+        )
+        .unwrap();
+        (cloned, chat, rxws, txws)
+    }
+
+    #[tokio::test]
+    async fn test_send_message() {
+        let (ws, chat, _rxws, _txws) = create_chat_system();
+        chat.send_message("test".to_string(), Channel::Group("test".to_string()))
+            .await
+            .unwrap();
+        assert_eq!(
+            ws.call_map
+                .lock()
+                .unwrap()
+                .get("send_message".into())
+                .unwrap(),
+            &1
+        );
+    }
+}
