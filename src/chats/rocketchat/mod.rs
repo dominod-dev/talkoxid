@@ -223,8 +223,10 @@ mod tests {
     use super::super::super::UI;
     use super::*;
     use async_trait::async_trait;
+    use chrono::{TimeZone, Utc};
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
+
     #[derive(Clone)]
     struct FakeWsWriter {
         call_map: Arc<Mutex<HashMap<String, Vec<Vec<String>>>>>,
@@ -376,20 +378,14 @@ mod tests {
             ui_tx: Sender<ChatEvent>,
             ui_rx: Receiver<ChatEvent>,
             ws: FakeWsWriter,
-        ) -> Result<
-            (
-                Self,
-                Receiver<tungstenite::Message>,
-                Sender<tungstenite::Message>,
-            ),
-            Box<dyn Error>,
-        > {
+        ) -> Result<(Self, Receiver<ChatEvent>, Sender<tungstenite::Message>), Box<dyn Error>>
+        {
             let mut ws_host = host.clone();
             ws_host
                 .set_scheme("ws")
                 .map_err(|err| format!("{:?}", err))?;
             ws_host.set_path("/websocket");
-            let (ws_writer, rxws) = async_channel::unbounded();
+            let (ws_writer, _) = async_channel::unbounded();
             let ponger = ws_writer.clone();
             let (txws, ws_reader) = async_channel::unbounded();
             Ok((
@@ -399,10 +395,10 @@ mod tests {
                     ws_reader,
                     ui_tx,
                     ponger,
-                    ui_rx,
+                    ui_rx: ui_rx.clone(),
                     username,
                 },
-                rxws,
+                ui_rx,
                 txws,
             ))
         }
@@ -411,7 +407,7 @@ mod tests {
     fn create_chat_system() -> (
         FakeWsWriter,
         RocketChat<FakeUI, FakeWsWriter>,
-        Receiver<tungstenite::Message>,
+        Receiver<ChatEvent>,
         Sender<tungstenite::Message>,
     ) {
         let ws = FakeWsWriter {
@@ -475,5 +471,33 @@ mod tests {
             ws_call_map.get("get_users_room".into()).unwrap()[0],
             vec!["test_channel".to_string()]
         );
+    }
+
+    #[tokio::test]
+    async fn test_recv_message() {
+        let (_, chat, ui_rx, txws) = create_chat_system();
+        let message_str =
+            std::include_str!("../../../tests/data/test_recv_message.json").to_string();
+        let message_loop = chat.wait_for_messages();
+        txws.send(tungstenite::Message::Text(message_str))
+            .await
+            .unwrap();
+        let recv_msg = ui_rx.recv();
+        tokio::select! {
+            _ = message_loop => {panic!("Abnormal")},
+            msg = recv_msg => {
+                assert_eq!(
+                    msg.unwrap(),
+                    ChatEvent::RecvMessage(
+                        Message {
+                            author: "testauthor".into(),
+                            content: "testcontent".into(),
+                            datetime: Utc.timestamp_millis(1593435867123),
+                        },
+                        Channel::Group("testchannel".into()),
+                    )
+                );
+            },
+        };
     }
 }

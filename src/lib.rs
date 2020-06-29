@@ -18,7 +18,7 @@ use std::rc::Rc;
 
 use views::{BufferView, ChannelView, MessageBoxView};
 
-#[derive(Clone, Debug)]
+#[derive(Eq, PartialEq, PartialOrd, Clone, Debug)]
 pub struct Message {
     pub author: String,
     pub content: String,
@@ -82,6 +82,7 @@ impl Ord for Channel {
     }
 }
 
+#[derive(Eq, PartialEq, PartialOrd, Clone, Debug)]
 pub enum ChatEvent {
     SendMessage(String, Channel),
     RecvMessage(Message, Channel),

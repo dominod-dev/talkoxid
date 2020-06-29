@@ -1,0 +1,39 @@
+{
+    "msg": "changed",
+    "collection": "stream-notify-user",
+    "id": "id",
+    "fields": {
+        "eventName": "qu8ba5nqHTBSDaPuL/rooms-changed",
+        "args": [
+            "updated",
+            {
+                "_id": "GENERAL",
+                "t": "c",
+                "name": "general",
+                "usernames": [],
+                "usersCount": 3,
+                "default": true,
+                "_updatedAt": {
+                    "$date": 1593435867183
+                },
+                "lastMessage": {
+                    "rid": "testchannel",
+                    "msg": "testcontent",
+                    "ts": {
+                        "$date": 1593435867123
+                    },
+                    "u": {
+                        "_id": "qu8ba5nqHTBSDaPuL",
+                        "username": "testauthor"
+                    },
+                    "mentions": [],
+                    "channels": [],
+                    "_updatedAt": {
+                        "$date": 1593435867142
+                    },
+                    "_id": "nFJCiS76ZRAZQiD4E"
+                }
+            }
+        ]
+    }
+}
