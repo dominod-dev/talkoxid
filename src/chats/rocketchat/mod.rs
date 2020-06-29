@@ -220,14 +220,38 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::super::super::CursiveUI;
+    use super::super::super::UI;
     use super::*;
     use async_trait::async_trait;
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
     #[derive(Clone)]
     struct FakeWsWriter {
-        call_map: Arc<Mutex<HashMap<String, usize>>>,
+        call_map: Arc<Mutex<HashMap<String, Vec<Vec<String>>>>>,
+    }
+    #[derive(Clone)]
+    struct FakeUI {
+        call_map: Arc<Mutex<HashMap<String, Vec<Vec<String>>>>>,
+    }
+    impl UI for FakeUI {
+        fn update_messages(&self, _content: String) -> Result<(), Box<dyn Error>> {
+            Ok(())
+        }
+        fn update_channels(&self, _channels: Vec<(String, Channel)>) -> Result<(), Box<dyn Error>> {
+            Ok(())
+        }
+        fn update_users_in_room(
+            &self,
+            _users: Vec<(String, String)>,
+        ) -> Result<(), Box<dyn Error>> {
+            Ok(())
+        }
+        fn add_message(&self, _message: Message) -> Result<(), Box<dyn Error>> {
+            Ok(())
+        }
+        fn select_channel(&self, _channel: Channel) -> Result<(), Box<dyn Error>> {
+            Ok(())
+        }
     }
     #[async_trait]
     impl WebSocketWriter for FakeWsWriter {
@@ -241,8 +265,9 @@ mod tests {
 
         async fn login(&self) -> Result<(), Box<dyn Error>> {
             let mut call_map = self.call_map.lock().unwrap();
-            let current_count = *call_map.get("login").unwrap();
-            call_map.insert("login".into(), current_count + 1);
+            let mut current_vec = call_map.get("login").or(Some(&vec![])).unwrap().clone();
+            current_vec.push(vec![]);
+            call_map.insert("login".into(), current_vec);
             Ok(())
         }
 
@@ -251,41 +276,91 @@ mod tests {
         }
 
         async fn pong(&self) -> Result<(), Box<dyn Error>> {
+            let mut call_map = self.call_map.lock().unwrap();
+            let mut current_vec = call_map.get("pong").or(Some(&vec![])).unwrap().clone();
+            current_vec.push(vec![]);
+            call_map.insert("pong".into(), current_vec);
             Ok(())
         }
         async fn send_message(
             &self,
-            _room_id: String,
-            _content: String,
+            room_id: String,
+            content: String,
         ) -> Result<(), Box<dyn Error>> {
             let mut call_map = self.call_map.lock().unwrap();
-            let current_count = *call_map
+            let mut current_vec = call_map
                 .get("send_message")
-                .or(Some(&(0 as usize)))
-                .unwrap();
-            call_map.insert("send_message".into(), current_count + 1);
+                .or(Some(&vec![]))
+                .unwrap()
+                .clone();
+            current_vec.push(vec![room_id, content]);
+            call_map.insert("send_message".into(), current_vec);
             Ok(())
         }
-        async fn load_history(
-            &self,
-            _room_id: String,
-            _count: usize,
-        ) -> Result<(), Box<dyn Error>> {
+        async fn load_history(&self, room_id: String, count: usize) -> Result<(), Box<dyn Error>> {
+            let mut call_map = self.call_map.lock().unwrap();
+            let mut current_vec = call_map
+                .get("load_history")
+                .or(Some(&vec![]))
+                .unwrap()
+                .clone();
+            current_vec.push(vec![room_id, format!("{}", count)]);
+            call_map.insert("load_history".into(), current_vec);
             Ok(())
         }
         async fn load_rooms(&self) -> Result<(), Box<dyn Error>> {
+            let mut call_map = self.call_map.lock().unwrap();
+            let mut current_vec = call_map
+                .get("load_rooms")
+                .or(Some(&vec![]))
+                .unwrap()
+                .clone();
+            current_vec.push(vec![]);
+            call_map.insert("load_rooms".into(), current_vec);
             Ok(())
         }
-        async fn create_direct_chat(&self, _username: String) -> Result<(), Box<dyn Error>> {
+        async fn create_direct_chat(&self, username: String) -> Result<(), Box<dyn Error>> {
+            let mut call_map = self.call_map.lock().unwrap();
+            let mut current_vec = call_map
+                .get("create_direct_chat")
+                .or(Some(&vec![]))
+                .unwrap()
+                .clone();
+            current_vec.push(vec![username]);
+            call_map.insert("create_direct_chat".into(), current_vec);
             Ok(())
         }
         async fn subscribe_user(&self) -> Result<(), Box<dyn Error>> {
+            let mut call_map = self.call_map.lock().unwrap();
+            let mut current_vec = call_map
+                .get("subscribe_user")
+                .or(Some(&vec![]))
+                .unwrap()
+                .clone();
+            current_vec.push(vec![]);
+            call_map.insert("subscribe_user".into(), current_vec);
             Ok(())
         }
         async fn subscribe_messages(&self) -> Result<(), Box<dyn Error>> {
+            let mut call_map = self.call_map.lock().unwrap();
+            let mut current_vec = call_map
+                .get("subscribe_messages")
+                .or(Some(&vec![]))
+                .unwrap()
+                .clone();
+            current_vec.push(vec![]);
+            call_map.insert("subscribe_messages".into(), current_vec);
             Ok(())
         }
         async fn get_users_room(&self, _room_id: String) -> Result<(), Box<dyn Error>> {
+            let mut call_map = self.call_map.lock().unwrap();
+            let mut current_vec = call_map
+                .get("get_users_room")
+                .or(Some(&vec![]))
+                .unwrap()
+                .clone();
+            current_vec.push(vec![_room_id]);
+            call_map.insert("get_users_room".into(), current_vec);
             Ok(())
         }
     }
@@ -335,7 +410,7 @@ mod tests {
 
     fn create_chat_system() -> (
         FakeWsWriter,
-        RocketChat<CursiveUI, FakeWsWriter>,
+        RocketChat<FakeUI, FakeWsWriter>,
         Receiver<tungstenite::Message>,
         Sender<tungstenite::Message>,
     ) {
@@ -344,10 +419,12 @@ mod tests {
         };
         let cloned = ws.clone();
         let (tx, rx) = async_channel::unbounded();
-        let (chat, rxws, txws) = RocketChat::<CursiveUI, FakeWsWriter>::new(
+        let (chat, rxws, txws) = RocketChat::<FakeUI, FakeWsWriter>::new(
             Url::parse("http://localhost").unwrap(),
             "usertest".into(),
-            CursiveUI::new(cursive::dummy().cb_sink().clone()),
+            FakeUI {
+                call_map: Arc::new(Mutex::new(HashMap::new())),
+            },
             tx,
             rx,
             ws,
@@ -359,16 +436,44 @@ mod tests {
     #[tokio::test]
     async fn test_send_message() {
         let (ws, chat, _rxws, _txws) = create_chat_system();
-        chat.send_message("test".to_string(), Channel::Group("test".to_string()))
-            .await
-            .unwrap();
+        chat.send_message(
+            "test".to_string(),
+            Channel::Group("test_channel".to_string()),
+        )
+        .await
+        .unwrap();
         assert_eq!(
             ws.call_map
                 .lock()
                 .unwrap()
                 .get("send_message".into())
-                .unwrap(),
-            &1
+                .unwrap()[0],
+            vec!["test_channel".to_string(), "test".to_string()]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_init() {
+        let (ws, chat, _rxws, _txws) = create_chat_system();
+        chat.init_view(Channel::Group("test_channel".to_string()))
+            .await
+            .unwrap();
+        let ws_call_map = ws.call_map.lock().unwrap();
+        assert_eq!(
+            ws_call_map.get("load_history".into()).unwrap()[0],
+            vec!["test_channel".to_string(), "100".to_string()]
+        );
+        assert_eq!(
+            ws_call_map.get("load_rooms".into()).unwrap()[0],
+            Vec::<String>::new()
+        );
+        assert_eq!(
+            ws_call_map.get("subscribe_user".into()).unwrap()[0],
+            Vec::<String>::new()
+        );
+        assert_eq!(
+            ws_call_map.get("get_users_room".into()).unwrap()[0],
+            vec!["test_channel".to_string()]
         );
     }
 }
