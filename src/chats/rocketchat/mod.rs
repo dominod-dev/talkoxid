@@ -104,13 +104,17 @@ where
         Ok(())
     }
 
-    async fn send_message(&self, content: String, channel: Channel) -> Result<(), Box<dyn Error + Send + Sync>> {
+    async fn send_message(
+        &self,
+        content: String,
+        channel: Channel,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
         self.ws
             .send_message(format!("{}", channel), content)
             .await?;
         Ok(())
     }
-    async fn start(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    async fn start_loop(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
         let read_loop = async {
             loop {
                 let msg = self.ws_reader.recv().await?;
@@ -201,7 +205,7 @@ where
             #[allow(unreachable_code)]
             Ok::<(), Box<dyn Error + Send + Sync>>(())
         };
-        let  ui_loop = async {
+        let ui_loop = async {
             loop {
                 match self.ui_rx.recv().await {
                     Ok(ChatEvent::SendMessage(message, channel)) => {
@@ -264,7 +268,10 @@ mod tests {
         fn update_messages(&self, _content: String) -> Result<(), Box<dyn Error + Send + Sync>> {
             Ok(())
         }
-        fn update_channels(&self, _channels: Vec<(String, Channel)>) -> Result<(), Box<dyn Error + Send + Sync>> {
+        fn update_channels(
+            &self,
+            _channels: Vec<(String, Channel)>,
+        ) -> Result<(), Box<dyn Error + Send + Sync>> {
             Ok(())
         }
         fn update_users_in_room(
@@ -298,7 +305,9 @@ mod tests {
             Ok(())
         }
 
-        async fn connect(_writer: &Sender<tungstenite::Message>) -> Result<(), Box<dyn Error + Send + Sync>> {
+        async fn connect(
+            _writer: &Sender<tungstenite::Message>,
+        ) -> Result<(), Box<dyn Error + Send + Sync>> {
             Ok(())
         }
 
@@ -324,7 +333,11 @@ mod tests {
             call_map.insert("send_message".into(), current_vec);
             Ok(())
         }
-        async fn load_history(&self, room_id: String, count: usize) -> Result<(), Box<dyn Error + Send + Sync>> {
+        async fn load_history(
+            &self,
+            room_id: String,
+            count: usize,
+        ) -> Result<(), Box<dyn Error + Send + Sync>> {
             let mut call_map = self.call_map.lock().unwrap();
             let mut current_vec = call_map
                 .get("load_history")
@@ -346,7 +359,10 @@ mod tests {
             call_map.insert("load_rooms".into(), current_vec);
             Ok(())
         }
-        async fn create_direct_chat(&self, username: String) -> Result<(), Box<dyn Error + Send + Sync>> {
+        async fn create_direct_chat(
+            &self,
+            username: String,
+        ) -> Result<(), Box<dyn Error + Send + Sync>> {
             let mut call_map = self.call_map.lock().unwrap();
             let mut current_vec = call_map
                 .get("create_direct_chat")
@@ -379,7 +395,10 @@ mod tests {
             call_map.insert("subscribe_messages".into(), current_vec);
             Ok(())
         }
-        async fn get_users_room(&self, _room_id: String) -> Result<(), Box<dyn Error + Send + Sync>> {
+        async fn get_users_room(
+            &self,
+            _room_id: String,
+        ) -> Result<(), Box<dyn Error + Send + Sync>> {
             let mut call_map = self.call_map.lock().unwrap();
             let mut current_vec = call_map
                 .get("get_users_room")
@@ -403,8 +422,10 @@ mod tests {
             ui_tx: Sender<ChatEvent>,
             ui_rx: Receiver<ChatEvent>,
             ws: FakeWsWriter,
-        ) -> Result<(Self, Receiver<ChatEvent>, Sender<tungstenite::Message>), Box<dyn Error + Send + Sync>>
-        {
+        ) -> Result<
+            (Self, Receiver<ChatEvent>, Sender<tungstenite::Message>),
+            Box<dyn Error + Send + Sync>,
+        > {
             let mut ws_host = host.clone();
             ws_host
                 .set_scheme("ws")

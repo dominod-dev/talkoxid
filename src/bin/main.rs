@@ -46,7 +46,7 @@ async fn chat_loop(
                 .await
                 .unwrap_or_else(|err| panic!("Can't init chat system: {}", err));
             tokio::select! {
-                _ = chat_system.start() => {
+                _ = chat_system.start_loop() => {
                     error!("The websocket loop crashed!")
                 }
 

@@ -15,13 +15,26 @@ pub trait WebSocketWriter {
 
     async fn login(&self) -> Result<(), Box<dyn Error + Send + Sync>>;
 
-    async fn connect(writer: &Sender<tungstenite::Message>) -> Result<(), Box<dyn Error + Send + Sync>>;
+    async fn connect(
+        writer: &Sender<tungstenite::Message>,
+    ) -> Result<(), Box<dyn Error + Send + Sync>>;
 
     async fn pong(&self) -> Result<(), Box<dyn Error + Send + Sync>>;
-    async fn send_message(&self, room_id: String, content: String) -> Result<(), Box<dyn Error + Send + Sync>>;
-    async fn load_history(&self, room_id: String, count: usize) -> Result<(), Box<dyn Error + Send + Sync>>;
+    async fn send_message(
+        &self,
+        room_id: String,
+        content: String,
+    ) -> Result<(), Box<dyn Error + Send + Sync>>;
+    async fn load_history(
+        &self,
+        room_id: String,
+        count: usize,
+    ) -> Result<(), Box<dyn Error + Send + Sync>>;
     async fn load_rooms(&self) -> Result<(), Box<dyn Error + Send + Sync>>;
-    async fn create_direct_chat(&self, username: String) -> Result<(), Box<dyn Error + Send + Sync>>;
+    async fn create_direct_chat(
+        &self,
+        username: String,
+    ) -> Result<(), Box<dyn Error + Send + Sync>>;
     async fn subscribe_user(&self) -> Result<(), Box<dyn Error + Send + Sync>>;
     async fn subscribe_messages(&self) -> Result<(), Box<dyn Error + Send + Sync>>;
     async fn get_users_room(&self, room_id: String) -> Result<(), Box<dyn Error + Send + Sync>>;
@@ -107,7 +120,9 @@ impl WebSocketWriter for RocketChatWsWriter {
         Ok(())
     }
 
-    async fn connect(writer: &Sender<tungstenite::Message>) -> Result<(), Box<dyn Error + Send + Sync>> {
+    async fn connect(
+        writer: &Sender<tungstenite::Message>,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
         let connect = ConnectWs {
             msg: "connect".into(),
             version: "1".into(),
@@ -127,7 +142,11 @@ impl WebSocketWriter for RocketChatWsWriter {
         Ok(())
     }
 
-    async fn send_message(&self, room_id: String, content: String) -> Result<(), Box<dyn Error + Send + Sync>> {
+    async fn send_message(
+        &self,
+        room_id: String,
+        content: String,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
         let msg = format!(
             r#"
             {{
@@ -148,7 +167,11 @@ impl WebSocketWriter for RocketChatWsWriter {
         Ok(())
     }
 
-    async fn load_history(&self, room_id: String, count: usize) -> Result<(), Box<dyn Error + Send + Sync>> {
+    async fn load_history(
+        &self,
+        room_id: String,
+        count: usize,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
         let msg = format!(
             r#"
             {{
@@ -179,7 +202,10 @@ impl WebSocketWriter for RocketChatWsWriter {
         Ok(())
     }
 
-    async fn create_direct_chat(&self, username: String) -> Result<(), Box<dyn Error + Send + Sync>> {
+    async fn create_direct_chat(
+        &self,
+        username: String,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
         let msg = format!(
             r#"
             {{
