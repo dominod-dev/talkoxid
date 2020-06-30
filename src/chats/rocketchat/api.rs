@@ -11,20 +11,20 @@ pub trait WebSocketWriter {
         username: &str,
         password_digest: &str,
         websocket: &Sender<tungstenite::Message>,
-    ) -> Result<(), Box<dyn Error>>;
+    ) -> Result<(), Box<dyn Error + Send + Sync>>;
 
-    async fn login(&self) -> Result<(), Box<dyn Error>>;
+    async fn login(&self) -> Result<(), Box<dyn Error + Send + Sync>>;
 
-    async fn connect(writer: &Sender<tungstenite::Message>) -> Result<(), Box<dyn Error>>;
+    async fn connect(writer: &Sender<tungstenite::Message>) -> Result<(), Box<dyn Error + Send + Sync>>;
 
-    async fn pong(&self) -> Result<(), Box<dyn Error>>;
-    async fn send_message(&self, room_id: String, content: String) -> Result<(), Box<dyn Error>>;
-    async fn load_history(&self, room_id: String, count: usize) -> Result<(), Box<dyn Error>>;
-    async fn load_rooms(&self) -> Result<(), Box<dyn Error>>;
-    async fn create_direct_chat(&self, username: String) -> Result<(), Box<dyn Error>>;
-    async fn subscribe_user(&self) -> Result<(), Box<dyn Error>>;
-    async fn subscribe_messages(&self) -> Result<(), Box<dyn Error>>;
-    async fn get_users_room(&self, room_id: String) -> Result<(), Box<dyn Error>>;
+    async fn pong(&self) -> Result<(), Box<dyn Error + Send + Sync>>;
+    async fn send_message(&self, room_id: String, content: String) -> Result<(), Box<dyn Error + Send + Sync>>;
+    async fn load_history(&self, room_id: String, count: usize) -> Result<(), Box<dyn Error + Send + Sync>>;
+    async fn load_rooms(&self) -> Result<(), Box<dyn Error + Send + Sync>>;
+    async fn create_direct_chat(&self, username: String) -> Result<(), Box<dyn Error + Send + Sync>>;
+    async fn subscribe_user(&self) -> Result<(), Box<dyn Error + Send + Sync>>;
+    async fn subscribe_messages(&self) -> Result<(), Box<dyn Error + Send + Sync>>;
+    async fn get_users_room(&self, room_id: String) -> Result<(), Box<dyn Error + Send + Sync>>;
 }
 
 pub struct RocketChatWsWriter {
@@ -40,7 +40,7 @@ impl RocketChatWsWriter {
         password: String,
         websocket: Sender<tungstenite::Message>,
         reader: &Receiver<tungstenite::Message>,
-    ) -> Result<Self, Box<dyn Error>> {
+    ) -> Result<Self, Box<dyn Error + Send + Sync>> {
         let mut hasher = Sha256::new();
         hasher.update(password);
         let password_digest = format!("{:x}", hasher.finalize());
@@ -65,7 +65,7 @@ impl WebSocketWriter for RocketChatWsWriter {
         username: &str,
         password_digest: &str,
         websocket: &Sender<tungstenite::Message>,
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
         let login = LoginWs {
             msg: "method".into(),
             method: "login".into(),
@@ -86,7 +86,7 @@ impl WebSocketWriter for RocketChatWsWriter {
         Ok(())
     }
 
-    async fn login(&self) -> Result<(), Box<dyn Error>> {
+    async fn login(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
         let login = LoginWs {
             msg: "method".into(),
             method: "login".into(),
@@ -107,7 +107,7 @@ impl WebSocketWriter for RocketChatWsWriter {
         Ok(())
     }
 
-    async fn connect(writer: &Sender<tungstenite::Message>) -> Result<(), Box<dyn Error>> {
+    async fn connect(writer: &Sender<tungstenite::Message>) -> Result<(), Box<dyn Error + Send + Sync>> {
         let connect = ConnectWs {
             msg: "connect".into(),
             version: "1".into(),
@@ -119,7 +119,7 @@ impl WebSocketWriter for RocketChatWsWriter {
         Ok(())
     }
 
-    async fn pong(&self) -> Result<(), Box<dyn Error>> {
+    async fn pong(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
         let pong = PongWs { msg: "pong".into() };
         self.websocket
             .send(tungstenite::Message::Text(serde_json::to_string(&pong)?))
@@ -127,7 +127,7 @@ impl WebSocketWriter for RocketChatWsWriter {
         Ok(())
     }
 
-    async fn send_message(&self, room_id: String, content: String) -> Result<(), Box<dyn Error>> {
+    async fn send_message(&self, room_id: String, content: String) -> Result<(), Box<dyn Error + Send + Sync>> {
         let msg = format!(
             r#"
             {{
@@ -148,7 +148,7 @@ impl WebSocketWriter for RocketChatWsWriter {
         Ok(())
     }
 
-    async fn load_history(&self, room_id: String, count: usize) -> Result<(), Box<dyn Error>> {
+    async fn load_history(&self, room_id: String, count: usize) -> Result<(), Box<dyn Error + Send + Sync>> {
         let msg = format!(
             r#"
             {{
@@ -164,7 +164,7 @@ impl WebSocketWriter for RocketChatWsWriter {
         Ok(())
     }
 
-    async fn load_rooms(&self) -> Result<(), Box<dyn Error>> {
+    async fn load_rooms(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
         let msg = r#"
             {
                 "msg": "method",
@@ -179,7 +179,7 @@ impl WebSocketWriter for RocketChatWsWriter {
         Ok(())
     }
 
-    async fn create_direct_chat(&self, username: String) -> Result<(), Box<dyn Error>> {
+    async fn create_direct_chat(&self, username: String) -> Result<(), Box<dyn Error + Send + Sync>> {
         let msg = format!(
             r#"
             {{
@@ -195,7 +195,7 @@ impl WebSocketWriter for RocketChatWsWriter {
         Ok(())
     }
 
-    async fn subscribe_user(&self) -> Result<(), Box<dyn Error>> {
+    async fn subscribe_user(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
         let sub = SubStreamChannelWs {
             msg: "sub".into(),
             id: "6".into(),
@@ -211,7 +211,7 @@ impl WebSocketWriter for RocketChatWsWriter {
         Ok(())
     }
 
-    async fn subscribe_messages(&self) -> Result<(), Box<dyn Error>> {
+    async fn subscribe_messages(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
         let sub = SubStreamChannelWs {
             msg: "sub".into(),
             id: "7".into(),
@@ -227,7 +227,7 @@ impl WebSocketWriter for RocketChatWsWriter {
         Ok(())
     }
 
-    async fn get_users_room(&self, room_id: String) -> Result<(), Box<dyn Error>> {
+    async fn get_users_room(&self, room_id: String) -> Result<(), Box<dyn Error + Send + Sync>> {
         let msg = format!(
             r#"
         {{

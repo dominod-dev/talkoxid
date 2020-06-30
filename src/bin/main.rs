@@ -45,13 +45,8 @@ async fn chat_loop(
                 .init_view(Channel::Group("GENERAL".to_string()))
                 .await
                 .unwrap_or_else(|err| panic!("Can't init chat system: {}", err));
-            let read_loop = chat_system.wait_for_messages();
-            let ui_event_loop = chat_system.update_ui();
             tokio::select! {
-                _ = ui_event_loop => {
-                    error!("The chat event loop crashed!")
-                }
-                _ = read_loop => {
+                _ = chat_system.start() => {
                     error!("The websocket loop crashed!")
                 }
 

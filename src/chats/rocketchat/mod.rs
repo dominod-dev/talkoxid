@@ -34,7 +34,7 @@ where
         ui: T,
         ui_tx: Sender<ChatEvent>,
         ui_rx: Receiver<ChatEvent>,
-    ) -> Result<Self, Box<dyn Error>> {
+    ) -> Result<Self, Box<dyn Error + Send + Sync>> {
         let mut ws_host = host.clone();
         ws_host
             .set_scheme("ws")
@@ -85,7 +85,7 @@ where
     T: UI + Send + Sync,
     U: WebSocketWriter + Send + Sync,
 {
-    async fn init_view(&self, channel: Channel) -> Result<(), Box<dyn Error>> {
+    async fn init_view(&self, channel: Channel) -> Result<(), Box<dyn Error + Send + Sync>> {
         let channel_to_switch = channel.clone();
         self.ws
             .load_history(format!("{}", channel_to_switch), 100)
@@ -99,120 +99,131 @@ where
         Ok(())
     }
 
-    async fn send_message(&self, content: String, channel: Channel) -> Result<(), Box<dyn Error>> {
+    async fn send_message(&self, content: String, channel: Channel) -> Result<(), Box<dyn Error + Send + Sync>> {
         self.ws
             .send_message(format!("{}", channel), content)
             .await?;
         Ok(())
     }
-    async fn wait_for_messages(&self) -> Result<(), Box<dyn Error>> {
-        loop {
-            let msg = self.ws_reader.recv().await?;
-            if let Ok(resp) = serde_json::from_str::<WsResponse>(&format!("{}", msg)[..]) {
-                match resp {
-                    WsResponse::NewMessage(ms) => {
-                        self.ui_tx
-                            .send(ChatEvent::RecvMessage(
-                                Message {
-                                    author: ms.fields.args.1.last_message.u.username.clone(),
-                                    content: ms.fields.args.1.last_message.msg.clone(),
-                                    datetime: ms.fields.args.1.last_message.ts.date,
-                                },
-                                Channel::Group(ms.fields.args.1.last_message.rid.clone()),
-                            ))
-                            .await?;
-                    }
-                    WsResponse::History { id, result, .. } if id == "3" => {
-                        let messages =
-                            result.messages.iter().rev().fold(String::from(""), |x, y| {
-                                format!(
-                                    "{}{}\n",
-                                    x,
+    async fn start(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+        let read_loop = async {
+            loop {
+                let msg = self.ws_reader.recv().await?;
+                if let Ok(resp) = serde_json::from_str::<WsResponse>(&format!("{}", msg)[..]) {
+                    match resp {
+                        WsResponse::NewMessage(ms) => {
+                            self.ui_tx
+                                .send(ChatEvent::RecvMessage(
                                     Message {
-                                        content: y.msg.clone(),
-                                        author: y.u.username.clone(),
-                                        datetime: y.ts.date
-                                    }
-                                )
-                            });
-                        self.ui.update_messages(messages)?;
-                    }
+                                        author: ms.fields.args.1.last_message.u.username.clone(),
+                                        content: ms.fields.args.1.last_message.msg.clone(),
+                                        datetime: ms.fields.args.1.last_message.ts.date,
+                                    },
+                                    Channel::Group(ms.fields.args.1.last_message.rid.clone()),
+                                ))
+                                .await?;
+                        }
+                        WsResponse::History { id, result, .. } if id == "3" => {
+                            let messages =
+                                result.messages.iter().rev().fold(String::from(""), |x, y| {
+                                    format!(
+                                        "{}{}\n",
+                                        x,
+                                        Message {
+                                            content: y.msg.clone(),
+                                            author: y.u.username.clone(),
+                                            datetime: y.ts.date
+                                        }
+                                    )
+                                });
+                            self.ui.update_messages(messages)?;
+                        }
 
-                    WsResponse::Rooms { id, result, .. } if id == "4" => {
-                        let channels = result
-                            .update
-                            .iter()
-                            .map(|x| match x {
-                                RoomResponseWs::Direct(DirectChatResponseWs { _id, usernames }) => {
-                                    let username = usernames
-                                        .iter()
-                                        .cloned()
-                                        .filter(|x| x != &self.username)
-                                        .collect::<Vec<String>>();
-                                    if username.len() <= 1 && !usernames.is_empty() {
-                                        let username = username.get(0).unwrap_or(&self.username);
-                                        (username.into(), Channel::User(_id.clone()))
-                                    } else {
-                                        let all_usernames = username.join(",");
-                                        (all_usernames, Channel::User(_id.clone()))
+                        WsResponse::Rooms { id, result, .. } if id == "4" => {
+                            let channels = result
+                                .update
+                                .iter()
+                                .map(|x| match x {
+                                    RoomResponseWs::Direct(DirectChatResponseWs {
+                                        _id,
+                                        usernames,
+                                    }) => {
+                                        let username = usernames
+                                            .iter()
+                                            .cloned()
+                                            .filter(|x| x != &self.username)
+                                            .collect::<Vec<String>>();
+                                        if username.len() <= 1 && !usernames.is_empty() {
+                                            let username =
+                                                username.get(0).unwrap_or(&self.username);
+                                            (username.into(), Channel::User(_id.clone()))
+                                        } else {
+                                            let all_usernames = username.join(",");
+                                            (all_usernames, Channel::User(_id.clone()))
+                                        }
                                     }
-                                }
-                                RoomResponseWs::Chat(ChatResponseWs { _id, name }) => {
-                                    (name.clone(), Channel::Group(_id.clone()))
-                                }
-                                RoomResponseWs::Private(ChatResponseWs { _id, name }) => {
-                                    (name.clone(), Channel::Private(_id.clone()))
-                                }
-                            })
-                            .collect::<Vec<(String, Channel)>>();
-                        self.ui.update_channels(channels)?
+                                    RoomResponseWs::Chat(ChatResponseWs { _id, name }) => {
+                                        (name.clone(), Channel::Group(_id.clone()))
+                                    }
+                                    RoomResponseWs::Private(ChatResponseWs { _id, name }) => {
+                                        (name.clone(), Channel::Private(_id.clone()))
+                                    }
+                                })
+                                .collect::<Vec<(String, Channel)>>();
+                            self.ui.update_channels(channels)?
+                        }
+                        WsResponse::JoinedRoom { id, result, .. } if id == "5" => {
+                            self.ui_tx
+                                .send(ChatEvent::Init(Channel::Group(result.rid)))
+                                .await?;
+                        }
+                        WsResponse::UsersInRoom { id, result, .. } if id == "8" => {
+                            let users = result
+                                .records
+                                .iter()
+                                .cloned()
+                                .map(|x| (x.username, x._id))
+                                .collect::<Vec<(String, String)>>();
+                            self.ui.update_users_in_room(users)?;
+                        }
+                        WsResponse::Ping { msg } if msg == "ping" => {
+                            self.ponger.send(r#"{"msg": "pong"}"#.into()).await?;
+                        }
+                        _ => {}
                     }
-                    WsResponse::JoinedRoom { id, result, .. } if id == "5" => {
-                        self.ui_tx
-                            .send(ChatEvent::Init(Channel::Group(result.rid)))
-                            .await?;
-                    }
-                    WsResponse::UsersInRoom { id, result, .. } if id == "8" => {
-                        let users = result
-                            .records
-                            .iter()
-                            .cloned()
-                            .map(|x| (x.username, x._id))
-                            .collect::<Vec<(String, String)>>();
-                        self.ui.update_users_in_room(users)?;
-                    }
-                    WsResponse::Ping { msg } if msg == "ping" => {
-                        self.ponger.send(r#"{"msg": "pong"}"#.into()).await?;
-                    }
-                    _ => {}
                 }
             }
-        }
-    }
-
-    async fn update_ui(&self) -> Result<(), Box<dyn Error>> {
-        loop {
-            match self.ui_rx.recv().await {
-                Ok(ChatEvent::SendMessage(message, channel)) => {
-                    let split = message.split(' ').collect::<Vec<&str>>();
-                    if message.starts_with("/direct") && split.len() > 1 {
-                        self.ws.create_direct_chat(split[1].into()).await?;
-                    } else {
-                        self.send_message(message, channel).await?;
+            #[allow(unreachable_code)]
+            Ok::<(), Box<dyn Error + Send + Sync>>(())
+        };
+        let  ui_loop = async {
+            loop {
+                match self.ui_rx.recv().await {
+                    Ok(ChatEvent::SendMessage(message, channel)) => {
+                        let split = message.split(' ').collect::<Vec<&str>>();
+                        if message.starts_with("/direct") && split.len() > 1 {
+                            self.ws.create_direct_chat(split[1].into()).await?;
+                        } else {
+                            self.send_message(message, channel).await?;
+                        }
                     }
-                }
-                Ok(ChatEvent::Init(channel)) => {
-                    self.init_view(channel).await?;
-                }
-                Ok(ChatEvent::RecvMessage(message, channel)) => {
-                    self.add_message(message, channel).await?;
-                }
-                Err(_) => continue,
-            };
-        }
+                    Ok(ChatEvent::Init(channel)) => {
+                        self.init_view(channel).await?;
+                    }
+                    Ok(ChatEvent::RecvMessage(message, channel)) => {
+                        self.add_message(message, channel).await?;
+                    }
+                    Err(_) => continue,
+                };
+            }
+            #[allow(unreachable_code)]
+            Ok::<(), Box<dyn Error + Send + Sync>>(())
+        };
+        tokio::try_join!(read_loop, ui_loop)?;
+        Ok(())
     }
 
-    async fn add_message(&self, message: Message, _channel: Channel) -> Result<(), Box<dyn Error>> {
+    async fn add_message(&self, message: Message, _channel: Channel) -> Result<(), Box<dyn Error + Send + Sync>> {
         self.ui.add_message(message)?;
         Ok(())
     }
@@ -236,22 +247,22 @@ mod tests {
         call_map: Arc<Mutex<HashMap<String, Vec<Vec<String>>>>>,
     }
     impl UI for FakeUI {
-        fn update_messages(&self, _content: String) -> Result<(), Box<dyn Error>> {
+        fn update_messages(&self, _content: String) -> Result<(), Box<dyn Error + Send + Sync>> {
             Ok(())
         }
-        fn update_channels(&self, _channels: Vec<(String, Channel)>) -> Result<(), Box<dyn Error>> {
+        fn update_channels(&self, _channels: Vec<(String, Channel)>) -> Result<(), Box<dyn Error + Send + Sync>> {
             Ok(())
         }
         fn update_users_in_room(
             &self,
             _users: Vec<(String, String)>,
-        ) -> Result<(), Box<dyn Error>> {
+        ) -> Result<(), Box<dyn Error + Send + Sync>> {
             Ok(())
         }
-        fn add_message(&self, _message: Message) -> Result<(), Box<dyn Error>> {
+        fn add_message(&self, _message: Message) -> Result<(), Box<dyn Error + Send + Sync>> {
             Ok(())
         }
-        fn select_channel(&self, _channel: Channel) -> Result<(), Box<dyn Error>> {
+        fn select_channel(&self, _channel: Channel) -> Result<(), Box<dyn Error + Send + Sync>> {
             Ok(())
         }
     }
@@ -261,11 +272,11 @@ mod tests {
             _username: &str,
             _password_digest: &str,
             _websocket: &Sender<tungstenite::Message>,
-        ) -> Result<(), Box<dyn Error>> {
+        ) -> Result<(), Box<dyn Error + Send + Sync>> {
             Ok(())
         }
 
-        async fn login(&self) -> Result<(), Box<dyn Error>> {
+        async fn login(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
             let mut call_map = self.call_map.lock().unwrap();
             let mut current_vec = call_map.get("login").or(Some(&vec![])).unwrap().clone();
             current_vec.push(vec![]);
@@ -273,11 +284,11 @@ mod tests {
             Ok(())
         }
 
-        async fn connect(_writer: &Sender<tungstenite::Message>) -> Result<(), Box<dyn Error>> {
+        async fn connect(_writer: &Sender<tungstenite::Message>) -> Result<(), Box<dyn Error + Send + Sync>> {
             Ok(())
         }
 
-        async fn pong(&self) -> Result<(), Box<dyn Error>> {
+        async fn pong(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
             let mut call_map = self.call_map.lock().unwrap();
             let mut current_vec = call_map.get("pong").or(Some(&vec![])).unwrap().clone();
             current_vec.push(vec![]);
@@ -288,7 +299,7 @@ mod tests {
             &self,
             room_id: String,
             content: String,
-        ) -> Result<(), Box<dyn Error>> {
+        ) -> Result<(), Box<dyn Error + Send + Sync>> {
             let mut call_map = self.call_map.lock().unwrap();
             let mut current_vec = call_map
                 .get("send_message")
@@ -299,7 +310,7 @@ mod tests {
             call_map.insert("send_message".into(), current_vec);
             Ok(())
         }
-        async fn load_history(&self, room_id: String, count: usize) -> Result<(), Box<dyn Error>> {
+        async fn load_history(&self, room_id: String, count: usize) -> Result<(), Box<dyn Error + Send + Sync>> {
             let mut call_map = self.call_map.lock().unwrap();
             let mut current_vec = call_map
                 .get("load_history")
@@ -310,7 +321,7 @@ mod tests {
             call_map.insert("load_history".into(), current_vec);
             Ok(())
         }
-        async fn load_rooms(&self) -> Result<(), Box<dyn Error>> {
+        async fn load_rooms(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
             let mut call_map = self.call_map.lock().unwrap();
             let mut current_vec = call_map
                 .get("load_rooms")
@@ -321,7 +332,7 @@ mod tests {
             call_map.insert("load_rooms".into(), current_vec);
             Ok(())
         }
-        async fn create_direct_chat(&self, username: String) -> Result<(), Box<dyn Error>> {
+        async fn create_direct_chat(&self, username: String) -> Result<(), Box<dyn Error + Send + Sync>> {
             let mut call_map = self.call_map.lock().unwrap();
             let mut current_vec = call_map
                 .get("create_direct_chat")
@@ -332,7 +343,7 @@ mod tests {
             call_map.insert("create_direct_chat".into(), current_vec);
             Ok(())
         }
-        async fn subscribe_user(&self) -> Result<(), Box<dyn Error>> {
+        async fn subscribe_user(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
             let mut call_map = self.call_map.lock().unwrap();
             let mut current_vec = call_map
                 .get("subscribe_user")
@@ -343,7 +354,7 @@ mod tests {
             call_map.insert("subscribe_user".into(), current_vec);
             Ok(())
         }
-        async fn subscribe_messages(&self) -> Result<(), Box<dyn Error>> {
+        async fn subscribe_messages(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
             let mut call_map = self.call_map.lock().unwrap();
             let mut current_vec = call_map
                 .get("subscribe_messages")
@@ -354,7 +365,7 @@ mod tests {
             call_map.insert("subscribe_messages".into(), current_vec);
             Ok(())
         }
-        async fn get_users_room(&self, _room_id: String) -> Result<(), Box<dyn Error>> {
+        async fn get_users_room(&self, _room_id: String) -> Result<(), Box<dyn Error + Send + Sync>> {
             let mut call_map = self.call_map.lock().unwrap();
             let mut current_vec = call_map
                 .get("get_users_room")
@@ -378,7 +389,7 @@ mod tests {
             ui_tx: Sender<ChatEvent>,
             ui_rx: Receiver<ChatEvent>,
             ws: FakeWsWriter,
-        ) -> Result<(Self, Receiver<ChatEvent>, Sender<tungstenite::Message>), Box<dyn Error>>
+        ) -> Result<(Self, Receiver<ChatEvent>, Sender<tungstenite::Message>), Box<dyn Error + Send + Sync>>
         {
             let mut ws_host = host.clone();
             ws_host
