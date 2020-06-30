@@ -110,7 +110,7 @@ pub enum ChatEvent {
 pub trait Chat {
     async fn init_view(&self, channel: Channel) -> Result<(), Box<dyn Error + Send + Sync>>;
     async fn send_message(&self, content: String, channel: Channel) -> Result<(), Box<dyn Error + Send + Sync>>;
-    async fn add_message(&self, message: Message, channel: Channel) -> Result<(), Box<dyn Error + Send + Sync>>;
+    async fn add_message(&self, message: Message, channel: &Channel) -> Result<(), Box<dyn Error + Send + Sync>>;
     async fn start(&self) -> Result<(), Box<dyn Error + Send + Sync>>;
 }
 

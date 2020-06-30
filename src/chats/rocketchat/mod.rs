@@ -10,6 +10,7 @@ use futures_util::StreamExt;
 use log::error;
 use schema::*;
 use std::error::Error;
+use std::sync::Mutex;
 use tokio_tungstenite::tungstenite;
 use url::Url;
 
@@ -21,6 +22,7 @@ pub struct RocketChat<T: UI + Sync + Send, U: WebSocketWriter + Send + Sync> {
     ponger: Sender<tungstenite::Message>,
     ui_rx: Receiver<ChatEvent>,
     username: String,
+    current_channel: Mutex<Option<Channel>>,
 }
 
 impl<T> RocketChat<T, RocketChatWsWriter>
@@ -76,6 +78,7 @@ where
             ponger,
             ui_rx,
             username,
+            current_channel: Mutex::new(None),
         })
     }
 }
@@ -96,6 +99,8 @@ where
             .get_users_room(format!("{}", channel_to_switch))
             .await?;
         self.ui.select_channel(channel_to_switch)?;
+        let mut current_channel = self.current_channel.lock().unwrap();
+        *current_channel = Some(channel);
         Ok(())
     }
 
@@ -211,7 +216,7 @@ where
                         self.init_view(channel).await?;
                     }
                     Ok(ChatEvent::RecvMessage(message, channel)) => {
-                        self.add_message(message, channel).await?;
+                        self.add_message(message, &channel).await?;
                     }
                     Err(_) => continue,
                 };
@@ -223,8 +228,17 @@ where
         Ok(())
     }
 
-    async fn add_message(&self, message: Message, _channel: Channel) -> Result<(), Box<dyn Error + Send + Sync>> {
-        self.ui.add_message(message)?;
+    async fn add_message(
+        &self,
+        message: Message,
+        channel: &Channel,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+        let current_channel = self.current_channel.lock().unwrap();
+        if let Some(current) = current_channel.as_ref() {
+            if channel == current {
+                self.ui.add_message(message)?;
+            }
+        }
         Ok(())
     }
 }
