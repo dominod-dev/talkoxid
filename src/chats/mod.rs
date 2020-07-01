@@ -1,2 +1,2 @@
-pub mod rocketchat;
+mod rocketchat;
 pub use rocketchat::RocketChat;

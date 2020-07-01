@@ -1,5 +1,5 @@
-pub mod api;
-pub mod schema;
+mod api;
+mod schema;
 
 use super::super::UI;
 use super::super::{Channel, Chat, ChatEvent, Message};

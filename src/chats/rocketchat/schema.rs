@@ -45,21 +45,6 @@ pub struct PongWs {
 }
 
 #[derive(Serialize, Debug)]
-pub enum LoadChannelHistoryParams {
-    RoomId(String),
-    Count(usize),
-    None,
-}
-
-#[derive(Serialize, Debug)]
-pub struct LoadChannelHistory {
-    pub msg: String,
-    pub method: String,
-    pub id: String,
-    pub params: Vec<LoadChannelHistoryParams>,
-}
-
-#[derive(Serialize, Debug)]
 pub struct SubStreamChannelWs {
     pub msg: String,
     pub id: String,
