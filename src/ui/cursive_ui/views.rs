@@ -16,25 +16,15 @@ pub struct MessageBoxView {
     view: EditView,
     pub channel: Option<Channel>,
     tx: Sender<ChatEvent>,
-    rt: tokio::runtime::Handle,
 }
 
 impl MessageBoxView {
-    pub fn new(
-        channel: Option<Channel>,
-        tx: Sender<ChatEvent>,
-        rt: tokio::runtime::Handle,
-    ) -> Self {
+    pub fn new(channel: Option<Channel>, tx: Sender<ChatEvent>) -> Self {
         let white = ColorType::Color(Color::Rgb(255, 255, 255));
         let black = ColorType::Color(Color::Rgb(0, 0, 0));
         let white_on_black = ColorStyle::new(black, white);
         let view = EditView::new().style(white_on_black);
-        MessageBoxView {
-            channel,
-            tx,
-            view,
-            rt,
-        }
+        MessageBoxView { channel, tx, view }
     }
 }
 
@@ -43,15 +33,12 @@ impl ViewWrapper for MessageBoxView {
     fn wrap_on_event<'r>(&mut self, event: Event) -> EventResult {
         match event {
             Event::Key(Key::Enter) => {
-                self.rt.block_on(async {
-                    self.tx
-                        .send(ChatEvent::SendMessage(
-                            String::from(self.view.get_content().as_ref()),
-                            self.channel.clone().unwrap(),
-                        ))
-                        .await
-                        .unwrap()
-                });
+                self.tx
+                    .try_send(ChatEvent::SendMessage(
+                        String::from(self.view.get_content().as_ref()),
+                        self.channel.clone().unwrap(),
+                    ))
+                    .unwrap();
                 self.view.set_content("");
                 EventResult::Consumed(None)
             }

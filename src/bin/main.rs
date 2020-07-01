@@ -68,7 +68,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let rt = Runtime::new().unwrap();
     let handle = rt.handle().clone();
-    let ui = CursiveUI::new(tx, rx_ui, rt.handle().clone());
+    let ui = CursiveUI::new(tx, rx_ui);
     let th = thread::spawn(move || {
         handle.block_on(chat_loop(rx, close_rx, tx_ui, config));
     });
@@ -76,7 +76,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     ui.start_loop().unwrap();
 
     rt.handle()
-        .clone()
         .block_on(async { close_tx.send(()).await.unwrap() });
     th.join().unwrap();
 

@@ -44,10 +44,9 @@ fn format_channel(channels: Vec<(String, Channel)>) -> Vec<(String, Channel)> {
 
 fn on_channel_changed(
     tx: async_channel::Sender<ChatEvent>,
-    rt: tokio::runtime::Handle,
 ) -> impl Fn(&mut Cursive, &Channel) -> () {
     move |siv: &mut Cursive, item: &Channel| {
-        rt.block_on(async { tx.send(ChatEvent::Init(item.clone())).await.unwrap() });
+        tx.try_send(ChatEvent::Init(item.clone())).unwrap();
         siv.focus_name("input").unwrap();
     }
 }
@@ -59,11 +58,7 @@ pub struct CursiveUI {
 }
 
 impl CursiveUI {
-    pub fn new(
-        tx: async_channel::Sender<ChatEvent>,
-        rx: async_channel::Receiver<UIEvent>,
-        rt: tokio::runtime::Handle,
-    ) -> Self {
+    pub fn new(tx: async_channel::Sender<ChatEvent>, rx: async_channel::Receiver<UIEvent>) -> Self {
         let mut siv = cursive::default();
 
         let cb_sink = siv.cb_sink().clone();
@@ -75,11 +70,10 @@ impl CursiveUI {
             .scrollable()
             .scroll_strategy(ScrollStrategy::StickToBottom)
             .with_name("scroll");
-        let message_input_box =
-            MessageBoxView::new(None, tx.clone(), rt.clone()).with_name("input");
+        let message_input_box = MessageBoxView::new(None, tx.clone()).with_name("input");
 
         let channel_list = ChannelView::new()
-            .on_submit(on_channel_changed(tx, rt))
+            .on_submit(on_channel_changed(tx))
             .with_name("channel_list")
             .scrollable();
         let users_list = SelectView::<String>::new()
