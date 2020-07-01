@@ -93,6 +93,16 @@ pub enum ChatEvent {
     Init(Channel),
 }
 
+#[derive(Eq, PartialEq, PartialOrd, Clone, Debug)]
+pub enum UIEvent {
+    UpdateMessages(String),
+    UpdateChannels(Vec<(String, Channel)>),
+    UpdateUsersInRoom(Vec<(String, String)>),
+    AddMessages(Message),
+    SelectChannel(Channel),
+    ShowFatalError(String),
+}
+
 #[async_trait]
 pub trait Chat {
     async fn init_view(&self, channel: Channel) -> Result<(), Box<dyn Error + Send + Sync>>;
@@ -121,4 +131,6 @@ pub trait UI {
     ) -> Result<(), Box<dyn Error + Send + Sync>>;
     fn add_message(&self, message: Message) -> Result<(), Box<dyn Error + Send + Sync>>;
     fn select_channel(&self, channel: Channel) -> Result<(), Box<dyn Error + Send + Sync>>;
+    fn show_fatal_error(&self, content: String) -> Result<(), Box<dyn Error + Send + Sync>>;
+    fn start_loop(&self) -> Result<(), Box<dyn Error + Send + Sync>>;
 }

@@ -1,8 +1,7 @@
 mod api;
 mod schema;
 
-use super::super::UI;
-use super::super::{Channel, Chat, ChatEvent, Message};
+use super::super::{Channel, Chat, ChatEvent, Message, UIEvent};
 use api::{RocketChatWsWriter, WebSocketWriter};
 use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
@@ -14,8 +13,8 @@ use std::sync::Mutex;
 use tokio_tungstenite::tungstenite;
 use url::Url;
 
-pub struct RocketChat<T: UI + Sync + Send, U: WebSocketWriter + Send + Sync> {
-    ui: T,
+pub struct RocketChat<U: WebSocketWriter + Send + Sync> {
+    tx_ui: Sender<UIEvent>,
     ws: U,
     ws_reader: Receiver<tungstenite::Message>,
     ponger: Sender<tungstenite::Message>,
@@ -24,9 +23,8 @@ pub struct RocketChat<T: UI + Sync + Send, U: WebSocketWriter + Send + Sync> {
     current_channel: Mutex<Option<Channel>>,
 }
 
-impl<T, U> RocketChat<T, U>
+impl<U> RocketChat<U>
 where
-    T: UI + Send + Sync,
     U: WebSocketWriter + Send + Sync,
 {
     async fn wait_messages_loop(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -65,7 +63,7 @@ where
                                     }
                                 )
                             });
-                        self.ui.update_messages(messages)?;
+                        self.tx_ui.send(UIEvent::UpdateMessages(messages)).await?;
                     }
 
                     WsResponse::Rooms { id, result, .. } if id == "4" => {
@@ -95,7 +93,7 @@ where
                                 }
                             })
                             .collect::<Vec<(String, Channel)>>();
-                        self.ui.update_channels(channels)?
+                        self.tx_ui.send(UIEvent::UpdateChannels(channels)).await?;
                     }
                     WsResponse::JoinedRoom { id, result, .. } if id == "5" => {
                         self.init_view(Channel::Group(result.rid)).await?;
@@ -107,7 +105,7 @@ where
                             .cloned()
                             .map(|x| (x.username, x._id))
                             .collect::<Vec<(String, String)>>();
-                        self.ui.update_users_in_room(users)?;
+                        self.tx_ui.send(UIEvent::UpdateUsersInRoom(users)).await?;
                     }
                     WsResponse::Ping { msg } if msg == "ping" => {
                         self.ponger.send(r#"{"msg": "pong"}"#.into()).await?;
@@ -141,15 +139,12 @@ where
     }
 }
 
-impl<T> RocketChat<T, RocketChatWsWriter>
-where
-    T: UI + Send + Sync,
-{
+impl RocketChat<RocketChatWsWriter> {
     pub async fn new(
         host: Url,
         username: String,
         password: String,
-        ui: T,
+        tx_ui: Sender<UIEvent>,
         ui_rx: Receiver<ChatEvent>,
     ) -> Result<Self, Box<dyn Error + Send + Sync>> {
         let mut ws_host = host.clone();
@@ -186,7 +181,7 @@ where
         });
         let ws = RocketChatWsWriter::new(username.clone(), password, ws_writer, &ws_reader).await?;
         Ok(RocketChat {
-            ui,
+            tx_ui,
             ws,
             ws_reader,
             ponger,
@@ -197,9 +192,8 @@ where
     }
 }
 #[async_trait]
-impl<T, U> Chat for RocketChat<T, U>
+impl<U> Chat for RocketChat<U>
 where
-    T: UI + Send + Sync,
     U: WebSocketWriter + Send + Sync,
 {
     async fn init_view(&self, channel: Channel) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -212,7 +206,9 @@ where
         self.ws
             .get_users_room(format!("{}", channel_to_switch))
             .await?;
-        self.ui.select_channel(channel_to_switch)?;
+        self.tx_ui
+            .send(UIEvent::SelectChannel(channel_to_switch))
+            .await?;
         let mut current_channel = self.current_channel.lock().unwrap();
         *current_channel = Some(channel);
         Ok(())
@@ -241,10 +237,10 @@ where
         message: Message,
         channel: &Channel,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
-        let current_channel = self.current_channel.lock().unwrap();
+        let current_channel = self.current_channel.lock().unwrap().clone();
         if let Some(current) = current_channel.as_ref() {
             if channel == current {
-                self.ui.add_message(message)?;
+                self.tx_ui.send(UIEvent::AddMessages(message)).await?;
             }
         }
         Ok(())
@@ -253,7 +249,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::super::super::UI;
     use super::*;
     use async_trait::async_trait;
     use chrono::{TimeZone, Utc};
@@ -263,73 +258,6 @@ mod tests {
     #[derive(Clone)]
     struct FakeWsWriter {
         call_map: Arc<Mutex<HashMap<String, Vec<Vec<String>>>>>,
-    }
-    #[derive(Clone)]
-    struct FakeUI {
-        call_map: Arc<Mutex<HashMap<String, Vec<Vec<String>>>>>,
-    }
-    impl UI for FakeUI {
-        fn update_messages(&self, content: String) -> Result<(), Box<dyn Error + Send + Sync>> {
-            let mut call_map = self.call_map.lock().unwrap();
-            let mut current_vec = call_map
-                .get("update_messages")
-                .or(Some(&vec![]))
-                .unwrap()
-                .clone();
-            current_vec.push(vec![content]);
-            call_map.insert("update_messages".into(), current_vec);
-            Ok(())
-        }
-        fn update_channels(
-            &self,
-            channels: Vec<(String, Channel)>,
-        ) -> Result<(), Box<dyn Error + Send + Sync>> {
-            let mut call_map = self.call_map.lock().unwrap();
-            let mut current_vec = call_map
-                .get("update_channels")
-                .or(Some(&vec![]))
-                .unwrap()
-                .clone();
-            current_vec.push(vec![format!("{:?}", channels)]);
-            call_map.insert("update_channels".into(), current_vec);
-            Ok(())
-        }
-        fn update_users_in_room(
-            &self,
-            users: Vec<(String, String)>,
-        ) -> Result<(), Box<dyn Error + Send + Sync>> {
-            let mut call_map = self.call_map.lock().unwrap();
-            let mut current_vec = call_map
-                .get("update_users_in_room")
-                .or(Some(&vec![]))
-                .unwrap()
-                .clone();
-            current_vec.push(vec![format!("{:?}", users)]);
-            call_map.insert("update_users_in_room".into(), current_vec);
-            Ok(())
-        }
-        fn add_message(&self, message: Message) -> Result<(), Box<dyn Error + Send + Sync>> {
-            let mut call_map = self.call_map.lock().unwrap();
-            let mut current_vec = call_map
-                .get("add_message")
-                .or(Some(&vec![]))
-                .unwrap()
-                .clone();
-            current_vec.push(vec![format!("{:?}", message)]);
-            call_map.insert("add_message".into(), current_vec);
-            Ok(())
-        }
-        fn select_channel(&self, channel: Channel) -> Result<(), Box<dyn Error + Send + Sync>> {
-            let mut call_map = self.call_map.lock().unwrap();
-            let mut current_vec = call_map
-                .get("select_channel")
-                .or(Some(&vec![]))
-                .unwrap()
-                .clone();
-            current_vec.push(vec![format!("{:?}", channel)]);
-            call_map.insert("select_channel".into(), current_vec);
-            Ok(())
-        }
     }
     #[async_trait]
     impl WebSocketWriter for FakeWsWriter {
@@ -455,14 +383,11 @@ mod tests {
         }
     }
 
-    impl<T> RocketChat<T, FakeWsWriter>
-    where
-        T: UI + Send + Sync,
-    {
+    impl RocketChat<FakeWsWriter> {
         pub fn new(
             host: Url,
             username: String,
-            ui: T,
+            tx_ui: Sender<UIEvent>,
             ui_rx: Receiver<ChatEvent>,
             ws: FakeWsWriter,
         ) -> Result<(Self, Sender<tungstenite::Message>), Box<dyn Error + Send + Sync>> {
@@ -476,7 +401,7 @@ mod tests {
             let (txws, ws_reader) = async_channel::unbounded();
             Ok((
                 RocketChat {
-                    ui,
+                    tx_ui,
                     ws,
                     ws_reader,
                     ponger,
@@ -491,28 +416,25 @@ mod tests {
 
     fn create_chat_system() -> (
         FakeWsWriter,
-        FakeUI,
-        RocketChat<FakeUI, FakeWsWriter>,
+        Receiver<UIEvent>,
+        RocketChat<FakeWsWriter>,
         Sender<tungstenite::Message>,
     ) {
         let ws = FakeWsWriter {
             call_map: Arc::new(Mutex::new(HashMap::new())),
         };
-        let ui = FakeUI {
-            call_map: Arc::new(Mutex::new(HashMap::new())),
-        };
         let cloned_ws = ws.clone();
-        let cloned_ui = ui.clone();
         let (_, rx) = async_channel::unbounded();
-        let (chat, txws) = RocketChat::<FakeUI, FakeWsWriter>::new(
+        let (tx_ui, rx_ui) = async_channel::unbounded();
+        let (chat, txws) = RocketChat::<FakeWsWriter>::new(
             Url::parse("http://localhost").unwrap(),
             "usertest".into(),
-            ui,
+            tx_ui,
             rx,
             ws,
         )
         .unwrap();
-        (cloned_ws, cloned_ui, chat, txws)
+        (cloned_ws, rx_ui, chat, txws)
     }
 
     #[tokio::test]
@@ -536,7 +458,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_add_message() {
-        let (_, ui, chat, _) = create_chat_system();
+        let (_, rx_ui, chat, _) = create_chat_system();
         chat.add_message(
             Message {
                 author: "testauthor".into(),
@@ -547,19 +469,23 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(
-            ui.call_map
-                .lock()
-                .unwrap()
-                .get("add_message".into())
-                .unwrap()[0],
-            vec!["Message { author: \"testauthor\", content: \"testcontent\", datetime: 2020-06-29T13:04:27.123Z }".to_string()]
-        );
+        if let UIEvent::AddMessages(msg) = rx_ui.try_recv().unwrap() {
+            assert_eq!(
+                msg,
+                Message {
+                    author: "testauthor".into(),
+                    content: "testcontent".into(),
+                    datetime: Utc.timestamp_millis(1593435867123),
+                }
+            );
+        } else {
+            panic!();
+        }
     }
 
     #[tokio::test]
     async fn test_add_message_not_current_channel() {
-        let (_, ui, chat, _) = create_chat_system();
+        let (_, rx_ui, chat, _) = create_chat_system();
         chat.add_message(
             Message {
                 author: "testauthor".into(),
@@ -570,12 +496,12 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(ui.call_map.lock().unwrap().get("add_message".into()), None);
+        assert!(rx_ui.try_recv().is_err());
     }
 
     #[tokio::test]
     async fn test_init() {
-        let (ws, _, chat, _) = create_chat_system();
+        let (ws, _rx_ui, chat, _) = create_chat_system();
         chat.init_view(Channel::Group("test_channel".to_string()))
             .await
             .unwrap();
@@ -600,24 +526,20 @@ mod tests {
 
     #[tokio::test]
     async fn test_recv_message() {
-        let (_, ui, chat, txws) = create_chat_system();
+        let (_, rx_ui, chat, txws) = create_chat_system();
         let message_str =
             std::include_str!("../../../tests/data/test_recv_message.json").to_string();
         let message_loop = chat.wait_messages_loop();
         txws.send(tungstenite::Message::Text(message_str))
             .await
             .unwrap();
-        let mut delay = tokio::time::delay_for(std::time::Duration::from_millis(300));
+        let msg = rx_ui.recv();
         tokio::select! {
             _ = message_loop => {panic!("Abnormal")},
-            _ = &mut delay => {
+            Ok(UIEvent::AddMessages(message)) = msg => {
                 assert_eq!(
-                    ui.call_map
-                        .lock()
-                        .unwrap()
-                        .get("add_message".into())
-                        .unwrap()[0],
-                    vec!["Message { author: \"testauthor\", content: \"testcontent\", datetime: 2020-06-29T13:04:27.123Z }".to_string()]
+                    message,
+                    Message { author: "testauthor".into(), content: "testcontent".into(), datetime: Utc.timestamp_millis(1593435867123) }
                 );
             },
         };
@@ -625,7 +547,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_recv_history() {
-        let (_, ui, chat, txws) = create_chat_system();
+        let (_, rx_ui, chat, txws) = create_chat_system();
         let message_str =
             std::include_str!("../../../tests/data/test_recv_history.json").to_string();
         let expected_str =
@@ -634,13 +556,12 @@ mod tests {
         txws.send(tungstenite::Message::Text(message_str))
             .await
             .unwrap();
-        let mut delay = tokio::time::delay_for(std::time::Duration::from_millis(300));
+        let msg = rx_ui.recv();
         tokio::select! {
-            _ = &mut delay => {
-                let ui_call_map = ui.call_map.lock().unwrap();
+            Ok(UIEvent::UpdateMessages(messages)) = msg => {
                 assert_eq!(
-                    ui_call_map.get("update_messages").unwrap()[0],
-                    vec![expected_str.to_string()]
+                    format!("{}", messages),
+                    expected_str.to_string()
                 );
             },
             _ = message_loop => {panic!("Abnormal")},
@@ -649,20 +570,20 @@ mod tests {
 
     #[tokio::test]
     async fn test_recv_rooms() {
-        let (_, ui, chat, txws) = create_chat_system();
+        let (_, rx_ui, chat, txws) = create_chat_system();
         let message_str = std::include_str!("../../../tests/data/test_recv_rooms.json").to_string();
         let expected_str = std::include_str!("../../../tests/data/test_recv_rooms.txt").to_string();
         let message_loop = chat.wait_messages_loop();
         txws.send(tungstenite::Message::Text(message_str))
             .await
             .unwrap();
-        let mut delay = tokio::time::delay_for(std::time::Duration::from_millis(300));
+
+        let msg = rx_ui.recv();
         tokio::select! {
-            _ = &mut delay => {
-                let ui_call_map = ui.call_map.lock().unwrap();
+            Ok(UIEvent::UpdateChannels(channels)) = msg => {
                 assert_eq!(
-                    ui_call_map.get("update_channels").unwrap()[0],
-                    vec![expected_str.to_string().trim()]
+                    format!("{:?}", channels),
+                    expected_str.to_string().trim()
                 );
             },
             _ = message_loop => {panic!("Abnormal")},
@@ -671,7 +592,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_recv_users_in_room() {
-        let (_, ui, chat, txws) = create_chat_system();
+        let (_, rx_ui, chat, txws) = create_chat_system();
         let message_str =
             std::include_str!("../../../tests/data/test_recv_users_in_room.json").to_string();
         let expected_str =
@@ -680,13 +601,12 @@ mod tests {
         txws.send(tungstenite::Message::Text(message_str))
             .await
             .unwrap();
-        let mut delay = tokio::time::delay_for(std::time::Duration::from_millis(300));
+        let msg = rx_ui.recv();
         tokio::select! {
-            _ = &mut delay => {
-                let ui_call_map = ui.call_map.lock().unwrap();
+            Ok(UIEvent::UpdateUsersInRoom(users)) = msg => {
                 assert_eq!(
-                    ui_call_map.get("update_users_in_room").unwrap()[0],
-                    vec![expected_str.to_string().trim()]
+                    format!("{:?}", users),
+                    expected_str.to_string().trim()
                 );
             },
             _ = message_loop => {panic!("Abnormal")},

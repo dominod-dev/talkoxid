@@ -1,22 +1,13 @@
 use async_channel::{bounded, unbounded};
-
 use clap::{load_yaml, App};
-
-use cursive::traits::*;
-use cursive::view::ScrollStrategy;
-use cursive::views::{LinearLayout, SelectView, TextView};
-use cursive::{CbSink, Cursive};
-
 use log::{error, info};
 use std::error::Error;
 use std::thread;
-
 use talkoxid::chats::RocketChat;
 use talkoxid::config::{load_config, ChatConfig};
-use talkoxid::ui::cursive_ui::views::{BufferView, ChannelView, MessageBoxView};
 use talkoxid::ui::cursive_ui::CursiveUI;
-use talkoxid::Chat;
-use talkoxid::{Channel, ChatEvent};
+use talkoxid::{Channel, ChatEvent, UIEvent};
+use talkoxid::{Chat, UI};
 
 use tokio::runtime::Runtime;
 
@@ -25,16 +16,14 @@ use url::Url;
 async fn chat_loop(
     rx: async_channel::Receiver<ChatEvent>,
     close_rx: async_channel::Receiver<()>,
-    cb_sink: CbSink,
+    tx_ui: async_channel::Sender<UIEvent>,
     config: ChatConfig,
 ) {
-    let cb_clone = cb_sink.clone();
-    let ui = CursiveUI::new(cb_sink);
     match RocketChat::new(
         Url::parse(&config.hostname).unwrap_or_else(|err| panic!("Bad url :{:?}", err)),
         config.username,
         config.password,
-        ui,
+        tx_ui.clone(),
         rx,
     )
     .await
@@ -56,28 +45,9 @@ async fn chat_loop(
         }
         Err(err) => {
             let err = format!("{}", err);
-            cb_clone
-                .send(Box::new(move |siv: &mut Cursive| {
-                    siv.add_layer(
-                        cursive::views::Dialog::new()
-                            .title("Error")
-                            .content(TextView::new(format!("{:?}", err)))
-                            .button("Quit", |s| s.quit()),
-                    );
-                }))
-                .unwrap();
+            tx_ui.send(UIEvent::ShowFatalError(err)).await.unwrap();
             close_rx.recv().await.unwrap();
         }
-    }
-}
-
-fn on_channel_changed(
-    tx: async_channel::Sender<ChatEvent>,
-    rt: tokio::runtime::Handle,
-) -> impl Fn(&mut Cursive, &Channel) -> () {
-    move |siv: &mut Cursive, item: &Channel| {
-        rt.block_on(async { tx.send(ChatEvent::Init(item.clone())).await.unwrap() });
-        siv.focus_name("input").unwrap();
     }
 }
 
@@ -93,57 +63,17 @@ fn main() -> Result<(), Box<dyn Error>> {
     );
 
     let (tx, rx) = unbounded();
+    let (tx_ui, rx_ui) = unbounded();
     let (close_tx, close_rx) = bounded(1);
 
     let rt = Runtime::new().unwrap();
     let handle = rt.handle().clone();
-
-    let mut siv = cursive::default();
-    let cb_sink = siv.cb_sink().clone();
-
+    let ui = CursiveUI::new(tx, rx_ui, rt.handle().clone());
     let th = thread::spawn(move || {
-        handle.block_on(chat_loop(rx, close_rx, cb_sink, config));
+        handle.block_on(chat_loop(rx, close_rx, tx_ui, config));
     });
 
-    let cb_sink = siv.cb_sink().clone();
-    siv.add_global_callback('q', |s| s.quit());
-    siv.load_toml(include_str!("../../assets/style.toml"))
-        .unwrap();
-    let buffer = BufferView::new(cb_sink.clone())
-        .with_name("chat")
-        .scrollable()
-        .scroll_strategy(ScrollStrategy::StickToBottom)
-        .with_name("scroll");
-    let message_input_box =
-        MessageBoxView::new(None, tx.clone(), rt.handle().clone()).with_name("input");
-
-    let channel_list = ChannelView::new()
-        .on_submit(on_channel_changed(tx, rt.handle().clone()))
-        .with_name("channel_list")
-        .scrollable();
-    let users_list = SelectView::<String>::new()
-        .with_name("users_list")
-        .scrollable();
-    let channels = LinearLayout::vertical()
-        .child(TextView::new("CHANNELS:"))
-        .child(channel_list)
-        .min_width(20);
-    let users = LinearLayout::vertical()
-        .child(TextView::new("USERS:"))
-        .child(users_list)
-        .min_width(20);
-    let chat_layout = LinearLayout::vertical()
-        .child(cursive::views::Panel::new(buffer).full_height())
-        .child(message_input_box)
-        .full_width();
-    let global_layout = LinearLayout::horizontal()
-        .child(channels)
-        .child(chat_layout)
-        .child(users);
-
-    siv.add_fullscreen_layer(global_layout);
-    siv.focus_name("input").unwrap();
-    siv.run();
+    ui.start_loop().unwrap();
 
     rt.handle()
         .clone()
