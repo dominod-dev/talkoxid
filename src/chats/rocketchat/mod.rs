@@ -14,6 +14,7 @@ use std::sync::Mutex;
 use tokio_tungstenite::tungstenite;
 use url::Url;
 
+
 pub struct RocketChat<T: UI + Sync + Send, U: WebSocketWriter + Send + Sync> {
     ui: T,
     ws: U,
@@ -23,6 +24,125 @@ pub struct RocketChat<T: UI + Sync + Send, U: WebSocketWriter + Send + Sync> {
     ui_rx: Receiver<ChatEvent>,
     username: String,
     current_channel: Mutex<Option<Channel>>,
+}
+
+
+impl<T, U> RocketChat<T, U>
+where
+    T: UI + Send + Sync,
+    U: WebSocketWriter + Send + Sync
+{
+
+    async fn wait_messages_loop(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+        loop {
+            let msg = self.ws_reader.recv().await?;
+            if let Ok(resp) = serde_json::from_str::<WsResponse>(&format!("{}", msg)[..]) {
+                match resp {
+                    WsResponse::NewMessage(ms) => {
+                        self.ui_tx
+                            .send(ChatEvent::RecvMessage(
+                                Message {
+                                    author: ms.fields.args.1.last_message.u.username.clone(),
+                                    content: ms.fields.args.1.last_message.msg.clone(),
+                                    datetime: ms.fields.args.1.last_message.ts.date,
+                                },
+                                Channel::Group(ms.fields.args.1.last_message.rid.clone()),
+                            ))
+                            .await?;
+                    }
+                    WsResponse::History { id, result, .. } if id == "3" => {
+                        let messages =
+                            result.messages.iter().rev().fold(String::from(""), |x, y| {
+                                format!(
+                                    "{}{}\n",
+                                    x,
+                                    Message {
+                                        content: y.msg.clone(),
+                                        author: y.u.username.clone(),
+                                        datetime: y.ts.date
+                                    }
+                                )
+                            });
+                        self.ui.update_messages(messages)?;
+                    }
+
+                    WsResponse::Rooms { id, result, .. } if id == "4" => {
+                        let channels = result
+                            .update
+                            .iter()
+                            .map(|x| match x {
+                                RoomResponseWs::Direct(DirectChatResponseWs {
+                                    _id,
+                                    usernames,
+                                }) => {
+                                    let username = usernames
+                                        .iter()
+                                        .cloned()
+                                        .filter(|x| x != &self.username)
+                                        .collect::<Vec<String>>();
+                                    if username.len() <= 1 && !usernames.is_empty() {
+                                        let username =
+                                            username.get(0).unwrap_or(&self.username);
+                                        (username.into(), Channel::User(_id.clone()))
+                                    } else {
+                                        let all_usernames = username.join(",");
+                                        (all_usernames, Channel::User(_id.clone()))
+                                    }
+                                }
+                                RoomResponseWs::Chat(ChatResponseWs { _id, name }) => {
+                                    (name.clone(), Channel::Group(_id.clone()))
+                                }
+                                RoomResponseWs::Private(ChatResponseWs { _id, name }) => {
+                                    (name.clone(), Channel::Private(_id.clone()))
+                                }
+                            })
+                            .collect::<Vec<(String, Channel)>>();
+                        self.ui.update_channels(channels)?
+                    }
+                    WsResponse::JoinedRoom { id, result, .. } if id == "5" => {
+                        self.ui_tx
+                            .send(ChatEvent::Init(Channel::Group(result.rid)))
+                            .await?;
+                    }
+                    WsResponse::UsersInRoom { id, result, .. } if id == "8" => {
+                        let users = result
+                            .records
+                            .iter()
+                            .cloned()
+                            .map(|x| (x.username, x._id))
+                            .collect::<Vec<(String, String)>>();
+                        self.ui.update_users_in_room(users)?;
+                    }
+                    WsResponse::Ping { msg } if msg == "ping" => {
+                        self.ponger.send(r#"{"msg": "pong"}"#.into()).await?;
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    async fn ui_event_loop(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+        loop {
+            match self.ui_rx.recv().await {
+                Ok(ChatEvent::SendMessage(message, channel)) => {
+                    let split = message.split(' ').collect::<Vec<&str>>();
+                    if message.starts_with("/direct") && split.len() > 1 {
+                        self.ws.create_direct_chat(split[1].into()).await?;
+                    } else {
+                        self.send_message(message, channel).await?;
+                    }
+                }
+                Ok(ChatEvent::Init(channel)) => {
+                    self.init_view(channel).await?;
+                }
+                Ok(ChatEvent::RecvMessage(message, channel)) => {
+                    self.add_message(message, &channel).await?;
+                }
+                Err(_) => continue,
+            };
+        }
+    }
 }
 
 impl<T> RocketChat<T, RocketChatWsWriter>
@@ -114,120 +234,10 @@ where
             .await?;
         Ok(())
     }
-    async fn start_loop(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
-        let read_loop = async {
-            loop {
-                let msg = self.ws_reader.recv().await?;
-                if let Ok(resp) = serde_json::from_str::<WsResponse>(&format!("{}", msg)[..]) {
-                    match resp {
-                        WsResponse::NewMessage(ms) => {
-                            self.ui_tx
-                                .send(ChatEvent::RecvMessage(
-                                    Message {
-                                        author: ms.fields.args.1.last_message.u.username.clone(),
-                                        content: ms.fields.args.1.last_message.msg.clone(),
-                                        datetime: ms.fields.args.1.last_message.ts.date,
-                                    },
-                                    Channel::Group(ms.fields.args.1.last_message.rid.clone()),
-                                ))
-                                .await?;
-                        }
-                        WsResponse::History { id, result, .. } if id == "3" => {
-                            let messages =
-                                result.messages.iter().rev().fold(String::from(""), |x, y| {
-                                    format!(
-                                        "{}{}\n",
-                                        x,
-                                        Message {
-                                            content: y.msg.clone(),
-                                            author: y.u.username.clone(),
-                                            datetime: y.ts.date
-                                        }
-                                    )
-                                });
-                            self.ui.update_messages(messages)?;
-                        }
 
-                        WsResponse::Rooms { id, result, .. } if id == "4" => {
-                            let channels = result
-                                .update
-                                .iter()
-                                .map(|x| match x {
-                                    RoomResponseWs::Direct(DirectChatResponseWs {
-                                        _id,
-                                        usernames,
-                                    }) => {
-                                        let username = usernames
-                                            .iter()
-                                            .cloned()
-                                            .filter(|x| x != &self.username)
-                                            .collect::<Vec<String>>();
-                                        if username.len() <= 1 && !usernames.is_empty() {
-                                            let username =
-                                                username.get(0).unwrap_or(&self.username);
-                                            (username.into(), Channel::User(_id.clone()))
-                                        } else {
-                                            let all_usernames = username.join(",");
-                                            (all_usernames, Channel::User(_id.clone()))
-                                        }
-                                    }
-                                    RoomResponseWs::Chat(ChatResponseWs { _id, name }) => {
-                                        (name.clone(), Channel::Group(_id.clone()))
-                                    }
-                                    RoomResponseWs::Private(ChatResponseWs { _id, name }) => {
-                                        (name.clone(), Channel::Private(_id.clone()))
-                                    }
-                                })
-                                .collect::<Vec<(String, Channel)>>();
-                            self.ui.update_channels(channels)?
-                        }
-                        WsResponse::JoinedRoom { id, result, .. } if id == "5" => {
-                            self.ui_tx
-                                .send(ChatEvent::Init(Channel::Group(result.rid)))
-                                .await?;
-                        }
-                        WsResponse::UsersInRoom { id, result, .. } if id == "8" => {
-                            let users = result
-                                .records
-                                .iter()
-                                .cloned()
-                                .map(|x| (x.username, x._id))
-                                .collect::<Vec<(String, String)>>();
-                            self.ui.update_users_in_room(users)?;
-                        }
-                        WsResponse::Ping { msg } if msg == "ping" => {
-                            self.ponger.send(r#"{"msg": "pong"}"#.into()).await?;
-                        }
-                        _ => {}
-                    }
-                }
-            }
-            #[allow(unreachable_code)]
-            Ok::<(), Box<dyn Error + Send + Sync>>(())
-        };
-        let ui_loop = async {
-            loop {
-                match self.ui_rx.recv().await {
-                    Ok(ChatEvent::SendMessage(message, channel)) => {
-                        let split = message.split(' ').collect::<Vec<&str>>();
-                        if message.starts_with("/direct") && split.len() > 1 {
-                            self.ws.create_direct_chat(split[1].into()).await?;
-                        } else {
-                            self.send_message(message, channel).await?;
-                        }
-                    }
-                    Ok(ChatEvent::Init(channel)) => {
-                        self.init_view(channel).await?;
-                    }
-                    Ok(ChatEvent::RecvMessage(message, channel)) => {
-                        self.add_message(message, &channel).await?;
-                    }
-                    Err(_) => continue,
-                };
-            }
-            #[allow(unreachable_code)]
-            Ok::<(), Box<dyn Error + Send + Sync>>(())
-        };
+    async fn start_loop(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+        let read_loop =  self.wait_messages_loop();
+        let ui_loop = self.ui_event_loop();
         tokio::try_join!(read_loop, ui_loop)?;
         Ok(())
     }
@@ -443,6 +453,7 @@ mod tests {
                     ponger,
                     ui_rx: ui_rx.clone(),
                     username,
+                    current_channel: Mutex::new(None)
                 },
                 ui_rx,
                 txws,
@@ -524,7 +535,7 @@ mod tests {
         let (_, chat, ui_rx, txws) = create_chat_system();
         let message_str =
             std::include_str!("../../../tests/data/test_recv_message.json").to_string();
-        let message_loop = chat.wait_for_messages();
+        let message_loop = chat.wait_messages_loop();
         txws.send(tungstenite::Message::Text(message_str))
             .await
             .unwrap();
