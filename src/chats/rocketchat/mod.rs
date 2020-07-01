@@ -14,7 +14,6 @@ use std::sync::Mutex;
 use tokio_tungstenite::tungstenite;
 use url::Url;
 
-
 pub struct RocketChat<T: UI + Sync + Send, U: WebSocketWriter + Send + Sync> {
     ui: T,
     ws: U,
@@ -26,13 +25,11 @@ pub struct RocketChat<T: UI + Sync + Send, U: WebSocketWriter + Send + Sync> {
     current_channel: Mutex<Option<Channel>>,
 }
 
-
 impl<T, U> RocketChat<T, U>
 where
     T: UI + Send + Sync,
-    U: WebSocketWriter + Send + Sync
+    U: WebSocketWriter + Send + Sync,
 {
-
     async fn wait_messages_loop(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
         loop {
             let msg = self.ws_reader.recv().await?;
@@ -71,18 +68,14 @@ where
                             .update
                             .iter()
                             .map(|x| match x {
-                                RoomResponseWs::Direct(DirectChatResponseWs {
-                                    _id,
-                                    usernames,
-                                }) => {
+                                RoomResponseWs::Direct(DirectChatResponseWs { _id, usernames }) => {
                                     let username = usernames
                                         .iter()
                                         .cloned()
                                         .filter(|x| x != &self.username)
                                         .collect::<Vec<String>>();
                                     if username.len() <= 1 && !usernames.is_empty() {
-                                        let username =
-                                            username.get(0).unwrap_or(&self.username);
+                                        let username = username.get(0).unwrap_or(&self.username);
                                         (username.into(), Channel::User(_id.clone()))
                                     } else {
                                         let all_usernames = username.join(",");
@@ -236,7 +229,7 @@ where
     }
 
     async fn start_loop(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
-        let read_loop =  self.wait_messages_loop();
+        let read_loop = self.wait_messages_loop();
         let ui_loop = self.ui_event_loop();
         tokio::try_join!(read_loop, ui_loop)?;
         Ok(())
@@ -453,7 +446,7 @@ mod tests {
                     ponger,
                     ui_rx: ui_rx.clone(),
                     username,
-                    current_channel: Mutex::new(None)
+                    current_channel: Mutex::new(None),
                 },
                 ui_rx,
                 txws,
