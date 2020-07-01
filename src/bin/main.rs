@@ -22,7 +22,6 @@ use tokio::runtime::Runtime;
 use url::Url;
 
 async fn chat_loop(
-    tx: async_channel::Sender<ChatEvent>,
     rx: async_channel::Receiver<ChatEvent>,
     close_rx: async_channel::Receiver<()>,
     cb_sink: CbSink,
@@ -35,7 +34,6 @@ async fn chat_loop(
         config.username,
         config.password,
         ui,
-        tx,
         rx,
     )
     .await
@@ -95,7 +93,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let (tx, rx) = unbounded();
     let (close_tx, close_rx) = bounded(1);
-    let tx_cloned = tx.clone();
 
     let rt = Runtime::new().unwrap();
     let handle = rt.handle().clone();
@@ -104,7 +101,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let cb_sink = siv.cb_sink().clone();
 
     let th = thread::spawn(move || {
-        handle.block_on(chat_loop(tx_cloned, rx, close_rx, cb_sink, config));
+        handle.block_on(chat_loop(rx, close_rx, cb_sink, config));
     });
 
     let cb_sink = siv.cb_sink().clone();

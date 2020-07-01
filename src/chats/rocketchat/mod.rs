@@ -18,7 +18,6 @@ pub struct RocketChat<T: UI + Sync + Send, U: WebSocketWriter + Send + Sync> {
     ui: T,
     ws: U,
     ws_reader: Receiver<tungstenite::Message>,
-    ui_tx: Sender<ChatEvent>,
     ponger: Sender<tungstenite::Message>,
     ui_rx: Receiver<ChatEvent>,
     username: String,
@@ -35,17 +34,23 @@ where
             let msg = self.ws_reader.recv().await?;
             if let Ok(resp) = serde_json::from_str::<WsResponse>(&format!("{}", msg)[..]) {
                 match resp {
-                    WsResponse::NewMessage(ms) => {
-                        self.ui_tx
-                            .send(ChatEvent::RecvMessage(
-                                Message {
-                                    author: ms.fields.args.1.last_message.u.username.clone(),
-                                    content: ms.fields.args.1.last_message.msg.clone(),
-                                    datetime: ms.fields.args.1.last_message.ts.date,
-                                },
-                                Channel::Group(ms.fields.args.1.last_message.rid.clone()),
-                            ))
-                            .await?;
+                    WsResponse::NewMessage(SocketMessageWs {
+                        fields:
+                            SocketArgsWs {
+                                args: SocketEventResponseWs(_, EventResponseWs { last_message }),
+                                ..
+                            },
+                        ..
+                    }) => {
+                        self.add_message(
+                            Message {
+                                author: last_message.u.username.clone(),
+                                content: last_message.msg.clone(),
+                                datetime: last_message.ts.date,
+                            },
+                            &Channel::Group(last_message.rid.clone()),
+                        )
+                        .await?;
                     }
                     WsResponse::History { id, result, .. } if id == "3" => {
                         let messages =
@@ -93,9 +98,7 @@ where
                         self.ui.update_channels(channels)?
                     }
                     WsResponse::JoinedRoom { id, result, .. } if id == "5" => {
-                        self.ui_tx
-                            .send(ChatEvent::Init(Channel::Group(result.rid)))
-                            .await?;
+                        self.init_view(Channel::Group(result.rid)).await?;
                     }
                     WsResponse::UsersInRoom { id, result, .. } if id == "8" => {
                         let users = result
@@ -147,7 +150,6 @@ where
         username: String,
         password: String,
         ui: T,
-        ui_tx: Sender<ChatEvent>,
         ui_rx: Receiver<ChatEvent>,
     ) -> Result<Self, Box<dyn Error + Send + Sync>> {
         let mut ws_host = host.clone();
@@ -187,7 +189,6 @@ where
             ui,
             ws,
             ws_reader,
-            ui_tx,
             ponger,
             ui_rx,
             username,
@@ -462,13 +463,9 @@ mod tests {
             host: Url,
             username: String,
             ui: T,
-            ui_tx: Sender<ChatEvent>,
             ui_rx: Receiver<ChatEvent>,
             ws: FakeWsWriter,
-        ) -> Result<
-            (Self, Receiver<ChatEvent>, Sender<tungstenite::Message>),
-            Box<dyn Error + Send + Sync>,
-        > {
+        ) -> Result<(Self, Sender<tungstenite::Message>), Box<dyn Error + Send + Sync>> {
             let mut ws_host = host.clone();
             ws_host
                 .set_scheme("ws")
@@ -482,13 +479,11 @@ mod tests {
                     ui,
                     ws,
                     ws_reader,
-                    ui_tx,
                     ponger,
                     ui_rx: ui_rx.clone(),
                     username,
                     current_channel: Mutex::new(Some(Channel::Group("test_channel".to_string()))),
                 },
-                ui_rx,
                 txws,
             ))
         }
@@ -498,7 +493,6 @@ mod tests {
         FakeWsWriter,
         FakeUI,
         RocketChat<FakeUI, FakeWsWriter>,
-        Receiver<ChatEvent>,
         Sender<tungstenite::Message>,
     ) {
         let ws = FakeWsWriter {
@@ -509,22 +503,21 @@ mod tests {
         };
         let cloned_ws = ws.clone();
         let cloned_ui = ui.clone();
-        let (tx, rx) = async_channel::unbounded();
-        let (chat, rxws, txws) = RocketChat::<FakeUI, FakeWsWriter>::new(
+        let (_, rx) = async_channel::unbounded();
+        let (chat, txws) = RocketChat::<FakeUI, FakeWsWriter>::new(
             Url::parse("http://localhost").unwrap(),
             "usertest".into(),
             ui,
-            tx,
             rx,
             ws,
         )
         .unwrap();
-        (cloned_ws, cloned_ui, chat, rxws, txws)
+        (cloned_ws, cloned_ui, chat, txws)
     }
 
     #[tokio::test]
     async fn test_send_message() {
-        let (ws, _, chat, _rxws, _txws) = create_chat_system();
+        let (ws, _, chat, _) = create_chat_system();
         chat.send_message(
             "test".to_string(),
             Channel::Group("test_channel".to_string()),
@@ -543,7 +536,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_add_message() {
-        let (_, ui, chat, _, _) = create_chat_system();
+        let (_, ui, chat, _) = create_chat_system();
         chat.add_message(
             Message {
                 author: "testauthor".into(),
@@ -566,7 +559,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_add_message_not_current_channel() {
-        let (_, ui, chat, _, _) = create_chat_system();
+        let (_, ui, chat, _) = create_chat_system();
         chat.add_message(
             Message {
                 author: "testauthor".into(),
@@ -582,7 +575,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_init() {
-        let (ws, _, chat, _rxws, _txws) = create_chat_system();
+        let (ws, _, chat, _) = create_chat_system();
         chat.init_view(Channel::Group("test_channel".to_string()))
             .await
             .unwrap();
@@ -607,27 +600,24 @@ mod tests {
 
     #[tokio::test]
     async fn test_recv_message() {
-        let (_, _, chat, ui_rx, txws) = create_chat_system();
+        let (_, ui, chat, txws) = create_chat_system();
         let message_str =
             std::include_str!("../../../tests/data/test_recv_message.json").to_string();
         let message_loop = chat.wait_messages_loop();
         txws.send(tungstenite::Message::Text(message_str))
             .await
             .unwrap();
-        let recv_msg = ui_rx.recv();
+        let mut delay = tokio::time::delay_for(std::time::Duration::from_millis(300));
         tokio::select! {
             _ = message_loop => {panic!("Abnormal")},
-            msg = recv_msg => {
+            _ = &mut delay => {
                 assert_eq!(
-                    msg.unwrap(),
-                    ChatEvent::RecvMessage(
-                        Message {
-                            author: "testauthor".into(),
-                            content: "testcontent".into(),
-                            datetime: Utc.timestamp_millis(1593435867123),
-                        },
-                        Channel::Group("testchannel".into()),
-                    )
+                    ui.call_map
+                        .lock()
+                        .unwrap()
+                        .get("add_message".into())
+                        .unwrap()[0],
+                    vec!["Message { author: \"testauthor\", content: \"testcontent\", datetime: 2020-06-29T13:04:27.123Z }".to_string()]
                 );
             },
         };
@@ -635,7 +625,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_recv_history() {
-        let (_, ui, chat, _, txws) = create_chat_system();
+        let (_, ui, chat, txws) = create_chat_system();
         let message_str =
             std::include_str!("../../../tests/data/test_recv_history.json").to_string();
         let expected_str =
@@ -659,7 +649,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_recv_rooms() {
-        let (_, ui, chat, _, txws) = create_chat_system();
+        let (_, ui, chat, txws) = create_chat_system();
         let message_str = std::include_str!("../../../tests/data/test_recv_rooms.json").to_string();
         let expected_str = std::include_str!("../../../tests/data/test_recv_rooms.txt").to_string();
         let message_loop = chat.wait_messages_loop();
@@ -681,7 +671,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_recv_users_in_room() {
-        let (_, ui, chat, _, txws) = create_chat_system();
+        let (_, ui, chat, txws) = create_chat_system();
         let message_str =
             std::include_str!("../../../tests/data/test_recv_users_in_room.json").to_string();
         let expected_str =

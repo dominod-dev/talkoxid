@@ -17,7 +17,7 @@
                     "$date": 1593435867183
                 },
                 "lastMessage": {
-                    "rid": "testchannel",
+                    "rid": "test_channel",
                     "msg": "testcontent",
                     "ts": {
                         "$date": 1593435867123
