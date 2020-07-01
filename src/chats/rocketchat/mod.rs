@@ -33,7 +33,6 @@ where
     async fn wait_messages_loop(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
         loop {
             let msg = self.ws_reader.recv().await?;
-            log::info!("{}", msg);
             if let Ok(resp) = serde_json::from_str::<WsResponse>(&format!("{}", msg)[..]) {
                 match resp {
                     WsResponse::NewMessage(ms) => {
