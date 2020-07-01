@@ -270,7 +270,6 @@ mod tests {
     }
     impl UI for FakeUI {
         fn update_messages(&self, content: String) -> Result<(), Box<dyn Error + Send + Sync>> {
-
             let mut call_map = self.call_map.lock().unwrap();
             let mut current_vec = call_map
                 .get("update_messages")
@@ -488,7 +487,7 @@ mod tests {
                     ponger,
                     ui_rx: ui_rx.clone(),
                     username,
-                    current_channel: Mutex::new(None),
+                    current_channel: Mutex::new(Some(Channel::Group("test_channel".to_string()))),
                 },
                 ui_rx,
                 txws,
@@ -507,8 +506,8 @@ mod tests {
             call_map: Arc::new(Mutex::new(HashMap::new())),
         };
         let ui = FakeUI {
-                call_map: Arc::new(Mutex::new(HashMap::new())),
-            };
+            call_map: Arc::new(Mutex::new(HashMap::new())),
+        };
         let cloned_ws = ws.clone();
         let cloned_ui = ui.clone();
         let (tx, rx) = async_channel::unbounded();
@@ -541,6 +540,45 @@ mod tests {
                 .unwrap()[0],
             vec!["test_channel".to_string(), "test".to_string()]
         );
+    }
+
+    #[tokio::test]
+    async fn test_add_message() {
+        let (_, ui, chat, _, _) = create_chat_system();
+        chat.add_message(
+            Message {
+                author: "testauthor".into(),
+                content: "testcontent".into(),
+                datetime: Utc.timestamp_millis(1593435867123),
+            },
+            &Channel::Group("test_channel".to_string()),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            ui.call_map
+                .lock()
+                .unwrap()
+                .get("add_message".into())
+                .unwrap()[0],
+            vec!["Message { author: \"testauthor\", content: \"testcontent\", datetime: 2020-06-29T13:04:27.123Z }".to_string()]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_add_message_not_current_channel() {
+        let (_, ui, chat, _, _) = create_chat_system();
+        chat.add_message(
+            Message {
+                author: "testauthor".into(),
+                content: "testcontent".into(),
+                datetime: Utc.timestamp_millis(1593435867123),
+            },
+            &Channel::Group("other_channel".to_string()),
+        )
+        .await
+        .unwrap();
+        assert_eq!(ui.call_map.lock().unwrap().get("add_message".into()), None);
     }
 
     #[tokio::test]
@@ -623,10 +661,8 @@ mod tests {
     #[tokio::test]
     async fn test_recv_rooms() {
         let (_, ui, chat, _, txws) = create_chat_system();
-        let message_str =
-            std::include_str!("../../../tests/data/test_recv_rooms.json").to_string();
-        let expected_str =
-            std::include_str!("../../../tests/data/test_recv_rooms.txt").to_string();
+        let message_str = std::include_str!("../../../tests/data/test_recv_rooms.json").to_string();
+        let expected_str = std::include_str!("../../../tests/data/test_recv_rooms.txt").to_string();
         let message_loop = chat.wait_messages_loop();
         txws.send(tungstenite::Message::Text(message_str))
             .await
