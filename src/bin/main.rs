@@ -13,9 +13,10 @@ use std::thread;
 
 use talkoxid::chats::RocketChat;
 use talkoxid::config::{load_config, ChatConfig};
-use talkoxid::views::{BufferView, ChannelView, MessageBoxView};
+use talkoxid::ui::cursive_ui::views::{BufferView, ChannelView, MessageBoxView};
+use talkoxid::ui::cursive_ui::CursiveUI;
 use talkoxid::Chat;
-use talkoxid::{Channel, ChatEvent, CursiveUI};
+use talkoxid::{Channel, ChatEvent};
 
 use tokio::runtime::Runtime;
 

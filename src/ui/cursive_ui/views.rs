@@ -10,7 +10,7 @@ use cursive::{CbSink, Cursive};
 
 use std::error::Error;
 
-use super::{Channel, ChatEvent};
+use super::super::super::{Channel, ChatEvent};
 
 pub struct MessageBoxView {
     view: EditView,
