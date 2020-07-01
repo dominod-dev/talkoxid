@@ -76,6 +76,7 @@ pub struct ChannelHistoryResponseWs {
 #[serde(rename_all = "camelCase")]
 pub struct EventResponseWs {
     pub last_message: MessageResponseWs,
+    pub t: String,
 }
 #[derive(Deserialize, Debug)]
 pub struct SocketEventResponseWs(pub String, pub EventResponseWs);

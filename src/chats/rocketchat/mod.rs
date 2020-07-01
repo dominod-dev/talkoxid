@@ -35,18 +35,23 @@ where
                     WsResponse::NewMessage(SocketMessageWs {
                         fields:
                             SocketArgsWs {
-                                args: SocketEventResponseWs(_, EventResponseWs { last_message }),
+                                args: SocketEventResponseWs(_, EventResponseWs { last_message, t }),
                                 ..
                             },
                         ..
                     }) => {
+                        let channel = match t {
+                            x if x == "d" => Channel::User(last_message.rid.clone()),
+                            x if x == "p" => Channel::Private(last_message.rid.clone()),
+                            _ => Channel::Group(last_message.rid.clone())
+                        };
                         self.add_message(
                             Message {
                                 author: last_message.u.username.clone(),
                                 content: last_message.msg.clone(),
                                 datetime: last_message.ts.date,
                             },
-                            &Channel::Group(last_message.rid.clone()),
+                            &channel,
                         )
                         .await?;
                     }
