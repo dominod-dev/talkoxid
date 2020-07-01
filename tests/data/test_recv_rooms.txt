@@ -1,0 +1,1 @@
+[("general", Group("GENERAL")), ("collkid,lou", User("e6eW7qYFRqABby8sxqu8ba5nqHTBSDaPuL")), ("admin,collkid,lou", User("jtFibeWBGFyZd8iLp")), ("admin,lou", User("qu8ba5nqHTBSDaPuLwqJNPhCkTEnGpKtL3"))]

@@ -1,0 +1,19 @@
+{
+  "msg": "result",
+  "id": "8",
+  "result": {
+    "total": 2,
+    "records": [
+      {
+        "_id": "wqJNPhCkTEnGpKtL3",
+        "name": "admin",
+        "username": "admin"
+      },
+      {
+        "_id": "e6eW7qYFRqABby8sx",
+        "name": "collkid",
+        "username": "collkid"
+      }
+    ]
+  }
+}

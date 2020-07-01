@@ -1,0 +1,138 @@
+{
+  "msg": "result",
+  "id": "4",
+  "result": {
+    "update": [
+      {
+        "_id": "GENERAL",
+        "t": "c",
+        "name": "general",
+        "usernames": [],
+        "usersCount": 3,
+        "default": true,
+        "_updatedAt": {
+          "$date": 1593589750182
+        },
+        "lastMessage": {
+          "rid": "GENERAL",
+          "msg": "la",
+          "ts": {
+            "$date": 1593589750164
+          },
+          "u": {
+            "_id": "qu8ba5nqHTBSDaPuL",
+            "username": "lou"
+          },
+          "mentions": [],
+          "channels": [],
+          "_updatedAt": {
+            "$date": 1593589750176
+          },
+          "_id": "b7qrACkkTRr6vqid4"
+        }
+      },
+      {
+        "_id": "e6eW7qYFRqABby8sxqu8ba5nqHTBSDaPuL",
+        "t": "d",
+        "usernames": [
+          "collkid",
+          "lou"
+        ],
+        "usersCount": 2,
+        "uids": [
+          "e6eW7qYFRqABby8sx",
+          "qu8ba5nqHTBSDaPuL"
+        ],
+        "_updatedAt": {
+          "$date": 1593533508488
+        },
+        "lastMessage": {
+          "_id": "uxdZi2Khiwg25bNH9",
+          "rid": "e6eW7qYFRqABby8sxqu8ba5nqHTBSDaPuL",
+          "msg": "nice",
+          "ts": {
+            "$date": 1593533508464
+          },
+          "u": {
+            "_id": "e6eW7qYFRqABby8sx",
+            "username": "collkid"
+          },
+          "mentions": [],
+          "channels": [],
+          "_updatedAt": {
+            "$date": 1593533508483
+          }
+        }
+      },
+      {
+        "_id": "jtFibeWBGFyZd8iLp",
+        "t": "d",
+        "usernames": [
+          "admin",
+          "collkid",
+          "lou"
+        ],
+        "usersCount": 3,
+        "uids": [
+          "e6eW7qYFRqABby8sx",
+          "qu8ba5nqHTBSDaPuL",
+          "wqJNPhCkTEnGpKtL3"
+        ],
+        "_updatedAt": {
+          "$date": 1592894207200
+        },
+        "lastMessage": {
+          "rid": "jtFibeWBGFyZd8iLp",
+          "msg": "lut",
+          "ts": {
+            "$date": 1592894207173
+          },
+          "u": {
+            "_id": "e6eW7qYFRqABby8sx",
+            "username": "collkid"
+          },
+          "mentions": [],
+          "channels": [],
+          "_updatedAt": {
+            "$date": 1592894207187
+          },
+          "_id": "AekPfEhSMLjJYdTRy"
+        }
+      },
+      {
+        "_id": "qu8ba5nqHTBSDaPuLwqJNPhCkTEnGpKtL3",
+        "t": "d",
+        "usernames": [
+          "admin",
+          "lou"
+        ],
+        "usersCount": 2,
+        "uids": [
+          "qu8ba5nqHTBSDaPuL",
+          "wqJNPhCkTEnGpKtL3"
+        ],
+        "_updatedAt": {
+          "$date": 1592945550400
+        },
+        "lastMessage": {
+          "rid": "qu8ba5nqHTBSDaPuLwqJNPhCkTEnGpKtL3",
+          "msg": "argh",
+          "ts": {
+            "$date": 1592945550369
+          },
+          "u": {
+            "_id": "wqJNPhCkTEnGpKtL3",
+            "username": "admin"
+          },
+          "mentions": [],
+          "channels": [],
+          "_updatedAt": {
+            "$date": 1592945550383
+          },
+          "_id": "LABacfEeBLjoKmGHk"
+        }
+      }
+    ],
+    "remove": []
+  }
+}

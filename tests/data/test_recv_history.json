@@ -1,0 +1,179 @@
+{
+  "msg": "result",
+  "id": "3",
+  "result": {
+    "messages": [
+      {
+        "_id": "b7qrACkkTRr6vqid4",
+        "rid": "GENERAL",
+        "msg": "la",
+        "ts": {
+          "$date": 1593589750164
+        },
+        "u": {
+          "_id": "qu8ba5nqHTBSDaPuL",
+          "username": "lou"
+        },
+        "mentions": [],
+        "channels": [],
+        "_updatedAt": {
+          "$date": 1593589750176
+        }
+      },
+      {
+        "_id": "sgBnbkFsC9f9gbQXK",
+        "rid": "GENERAL",
+        "msg": "nice",
+        "ts": {
+          "$date": 1593589667529
+        },
+        "u": {
+          "_id": "qu8ba5nqHTBSDaPuL",
+          "username": "lou"
+        },
+        "mentions": [],
+        "channels": [],
+        "_updatedAt": {
+          "$date": 1593589667533
+        }
+      },
+      {
+        "_id": "qssgGP4Md3ZpEGm5i",
+        "rid": "GENERAL",
+        "msg": "la",
+        "ts": {
+          "$date": 1593589665563
+        },
+        "u": {
+          "_id": "qu8ba5nqHTBSDaPuL",
+          "username": "lou"
+        },
+        "mentions": [],
+        "channels": [],
+        "_updatedAt": {
+          "$date": 1593589665574
+        }
+      },
+      {
+        "_id": "2eAFRkFyveHwTYzB7",
+        "rid": "GENERAL",
+        "msg": "yes !",
+        "ts": {
+          "$date": 1593589517659
+        },
+        "u": {
+          "_id": "qu8ba5nqHTBSDaPuL",
+          "username": "lou"
+        },
+        "mentions": [],
+        "channels": [],
+        "_updatedAt": {
+          "$date": 1593589517666
+        }
+      },
+      {
+        "_id": "HcZQZXtJ2fsrrSicE",
+        "rid": "GENERAL",
+        "msg": "slt",
+        "ts": {
+          "$date": 1593589515520
+        },
+        "u": {
+          "_id": "qu8ba5nqHTBSDaPuL",
+          "username": "lou"
+        },
+        "mentions": [],
+        "channels": [],
+        "_updatedAt": {
+          "$date": 1593589515528
+        }
+      },
+      {
+        "_id": "tnHrYYTHdsobkotTA",
+        "rid": "GENERAL",
+        "msg": "loul",
+        "ts": {
+          "$date": 1593542049353
+        },
+        "u": {
+          "_id": "qu8ba5nqHTBSDaPuL",
+          "username": "lou"
+        },
+        "mentions": [],
+        "channels": [],
+        "_updatedAt": {
+          "$date": 1593542049365
+        }
+      },
+      {
+        "_id": "t9YNEWnjk9bJBR7LF",
+        "rid": "GENERAL",
+        "msg": "la",
+        "ts": {
+          "$date": 1593542047816
+        },
+        "u": {
+          "_id": "qu8ba5nqHTBSDaPuL",
+          "username": "lou"
+        },
+        "mentions": [],
+        "channels": [],
+        "_updatedAt": {
+          "$date": 1593542047821
+        }
+      },
+      {
+        "_id": "LesGvxPXz9GFcqArq",
+        "rid": "GENERAL",
+        "msg": "la",
+        "ts": {
+          "$date": 1593541887532
+        },
+        "u": {
+          "_id": "qu8ba5nqHTBSDaPuL",
+          "username": "lou"
+        },
+        "mentions": [],
+        "channels": [],
+        "_updatedAt": {
+          "$date": 1593541887537
+        }
+      },
+      {
+        "_id": "bZ2mAQar6jFiGE2r7",
+        "rid": "GENERAL",
+        "msg": "laul",
+        "ts": {
+          "$date": 1593533525350
+        },
+        "u": {
+          "_id": "e6eW7qYFRqABby8sx",
+          "username": "collkid"
+        },
+        "mentions": [],
+        "channels": [],
+        "_updatedAt": {
+          "$date": 1593533525360
+        }
+      },
+      {
+        "_id": "kcFXb9BNLjSiAmXzG",
+        "rid": "GENERAL",
+        "msg": "la",
+        "ts": {
+          "$date": 1593533500974
+        },
+        "u": {
+          "_id": "qu8ba5nqHTBSDaPuL",
+          "username": "lou"
+        },
+        "mentions": [],
+        "channels": [],
+        "_updatedAt": {
+          "$date": 1593533500979
+        }
+      }
+    ],
+    "unreadNotLoaded": 0
+  }
+}
