@@ -5,7 +5,7 @@ use std::error::Error;
 use std::thread;
 use talkoxid::chats::RocketChat;
 use talkoxid::config::{load_config, ChatConfig};
-use talkoxid::ui::cursive_ui::CursiveUI;
+use talkoxid::ui::CursiveUI;
 use talkoxid::{Channel, ChatEvent, UIEvent};
 use talkoxid::{Chat, UI};
 
