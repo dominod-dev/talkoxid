@@ -131,6 +131,24 @@
           },
           "_id": "LABacfEeBLjoKmGHk"
         }
+      },
+      {
+          "_id": "hncFhRCpRrcB7Dodx",
+          "name": "test",
+          "fname": "test",
+          "t": "p",
+          "usersCount": 1,
+          "u": {
+              "_id": "wqJNPhCkTEnGpKtL3",
+              "username": "admin"
+          },
+          "customFields": {},
+          "broadcast": false,
+          "encrypted": false,
+          "ro": false,
+          "_updatedAt": {
+              "$date": 1592221940761
+          }
       }
     ],
     "remove": []

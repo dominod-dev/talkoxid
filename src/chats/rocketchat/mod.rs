@@ -77,18 +77,13 @@ where
                             .iter()
                             .map(|x| match x {
                                 RoomResponseWs::Direct(DirectChatResponseWs { _id, usernames }) => {
-                                    let username = usernames
+                                    let all_usernames = usernames
                                         .iter()
                                         .cloned()
                                         .filter(|x| x != &self.username)
-                                        .collect::<Vec<String>>();
-                                    if username.len() <= 1 && !usernames.is_empty() {
-                                        let username = username.get(0).unwrap_or(&self.username);
-                                        (username.into(), Channel::User(_id.clone()))
-                                    } else {
-                                        let all_usernames = username.join(",");
-                                        (all_usernames, Channel::User(_id.clone()))
-                                    }
+                                        .collect::<Vec<String>>()
+                                        .join(",");
+                                    (all_usernames, Channel::User(_id.clone()))
                                 }
                                 RoomResponseWs::Chat(ChatResponseWs { _id, name }) => {
                                     (name.clone(), Channel::Group(_id.clone()))
@@ -618,6 +613,51 @@ mod tests {
                 assert_eq!(
                     format!("{:?}", users),
                     expected_str.to_string().trim()
+                );
+            },
+            _ = message_loop => {panic!("Abnormal")},
+        };
+    }
+
+    #[tokio::test]
+    async fn test_recv_users_in_room_me() {
+        let (_, rx_ui, chat, tx_forwarder_ws) = create_chat_system();
+        let message_str =
+            std::include_str!("../../../tests/data/test_recv_users_in_room_me.json").to_string();
+        let message_loop = chat.wait_messages_loop();
+        tx_forwarder_ws
+            .send(tungstenite::Message::Text(message_str))
+            .await
+            .unwrap();
+        let msg = rx_ui.recv();
+        tokio::select! {
+            Ok(UIEvent::UpdateUsersInRoom(users)) = msg => {
+                assert_eq!(
+                    format!("{:?}", users),
+                    "[(\"usertest\", \"PqJNPhCjTElGpKtL3\")]".trim()
+                );
+            },
+            _ = message_loop => {panic!("Abnormal")},
+        };
+    }
+
+    #[tokio::test]
+    async fn test_recv_users_in_room_one_not_me() {
+        let (_, rx_ui, chat, tx_forwarder_ws) = create_chat_system();
+        let message_str =
+            std::include_str!("../../../tests/data/test_recv_users_in_room_one_not_me.json")
+                .to_string();
+        let message_loop = chat.wait_messages_loop();
+        tx_forwarder_ws
+            .send(tungstenite::Message::Text(message_str))
+            .await
+            .unwrap();
+        let msg = rx_ui.recv();
+        tokio::select! {
+            Ok(UIEvent::UpdateUsersInRoom(users)) = msg => {
+                assert_eq!(
+                    format!("{:?}", users),
+                    "[(\"someone\", \"eqJNPhCjTEyGpKtL3\")]".trim()
                 );
             },
             _ = message_loop => {panic!("Abnormal")},

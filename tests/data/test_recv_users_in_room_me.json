@@ -1,0 +1,14 @@
+{
+  "msg": "result",
+  "id": "8",
+  "result": {
+    "total": 2,
+    "records": [
+      {
+        "_id": "PqJNPhCjTElGpKtL3",
+        "name": "usertest",
+        "username": "usertest"
+      }
+    ]
+  }
+}
