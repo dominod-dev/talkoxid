@@ -1,24 +1,19 @@
-use async_channel::{bounded, unbounded, Receiver, Sender};
+use async_channel::{unbounded, Receiver, Sender};
 use clap::{load_yaml, App};
-use log::{error, info};
 use std::error::Error;
-use std::thread;
 use talkoxid::chats::RocketChat;
 use talkoxid::config::{load_config, ChatConfig};
 use talkoxid::ui::CursiveUI;
 use talkoxid::{Channel, ChatEvent, UIEvent};
 use talkoxid::{Chat, UI};
 
-use tokio::runtime::Runtime;
-
 use url::Url;
 
 async fn chat_loop(
     rx_chat: Receiver<ChatEvent>,
-    rx_close: Receiver<()>,
     tx_ui: Sender<UIEvent>,
     config: ChatConfig,
-) {
+) -> Result<(), Box<dyn Error + Send + Sync>> {
     match RocketChat::new(
         Url::parse(&config.hostname).unwrap_or_else(|err| panic!("Bad url :{:?}", err)),
         config.username,
@@ -31,28 +26,19 @@ async fn chat_loop(
         Ok(chat_system) => {
             chat_system
                 .init_view(Channel::Group("GENERAL".to_string()))
-                .await
-                .unwrap_or_else(|err| panic!("Can't init chat system: {}", err));
-            tokio::select! {
-                _ = chat_system.start_loop() => {
-                    error!("The websocket loop crashed!")
-                }
-
-                _ = rx_close.recv() => {
-                    info!("Disconnecting!")
-                }
-            };
+                .await?;
+            chat_system.start_loop().await?;
         }
         Err(err) => {
             let err = format!("{}", err);
-            tx_ui.send(UIEvent::ShowFatalError(err)).await.unwrap();
-            rx_close.recv().await.unwrap();
+            tx_ui.send(UIEvent::ShowFatalError(err)).await?;
         }
     }
+    Ok(())
 }
-
-fn main() -> Result<(), Box<dyn Error>> {
-    log4rs::init_file("config/log4rs.yaml", Default::default()).unwrap();
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
+    log4rs::init_file("config/log4rs.yaml", Default::default())?;
     let yaml = load_yaml!("../../config/cli.yaml");
     let matches = App::from_yaml(yaml).get_matches();
 
@@ -66,21 +52,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     let (tx_chat, rx_chat) = unbounded();
     // Channel used to communicate from chat to ui
     let (tx_ui, rx_ui) = unbounded();
-    // Channel used to terminate chat
-    let (tx_close, rx_close) = bounded(1);
 
-    let rt = Runtime::new().unwrap();
-    let handle = rt.handle().clone();
-    let ui = CursiveUI::new(tx_chat, rx_ui);
-    let th = thread::spawn(move || {
-        handle.block_on(chat_loop(rx_chat, rx_close, tx_ui, config));
+    let ui = tokio::task::spawn_blocking(move || {
+        let ui = CursiveUI::new(tx_chat, rx_ui);
+        ui.start_loop().unwrap();
     });
+    let chat = tokio::task::spawn(chat_loop(rx_chat, tx_ui, config));
 
-    ui.start_loop().unwrap();
-
-    rt.handle()
-        .block_on(async { tx_close.send(()).await.unwrap() });
-    th.join().unwrap();
-
+    ui.await?;
+    chat.await??;
     Ok(())
 }

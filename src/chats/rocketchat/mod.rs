@@ -123,8 +123,8 @@ where
 
     async fn ui_event_loop(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
         loop {
-            match self.rx_chat.recv().await {
-                Ok(ChatEvent::SendMessage(message, channel)) => {
+            match self.rx_chat.recv().await? {
+                ChatEvent::SendMessage(message, channel) => {
                     let split = message.split(' ').collect::<Vec<&str>>();
                     if message.starts_with("/direct") && split.len() > 1 {
                         self.ws.create_direct_chat(split[1].into()).await?;
@@ -132,13 +132,12 @@ where
                         self.send_message(message, channel).await?;
                     }
                 }
-                Ok(ChatEvent::Init(channel)) => {
+                ChatEvent::Init(channel) => {
                     self.init_view(channel).await?;
                 }
-                Ok(ChatEvent::RecvMessage(message, channel)) => {
+                ChatEvent::RecvMessage(message, channel) => {
                     self.add_message(message, &channel).await?;
                 }
-                Err(_) => continue,
             };
         }
     }
@@ -233,7 +232,10 @@ where
     async fn start_loop(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
         let read_loop = self.wait_messages_loop();
         let ui_loop = self.ui_event_loop();
-        tokio::try_join!(read_loop, ui_loop)?;
+        tokio::select! {
+            _ = read_loop => {},
+            _ = ui_loop => {},
+        }
         Ok(())
     }
 
