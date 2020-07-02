@@ -3,7 +3,7 @@ mod schema;
 
 use super::super::{Channel, Chat, ChatEvent, Message, UIEvent};
 use api::{RocketChatWsWriter, WebSocketWriter};
-use async_channel::{Receiver, Sender};
+use async_channel::{unbounded, Receiver, Sender};
 use async_trait::async_trait;
 use futures_util::StreamExt;
 use log::error;
@@ -16,9 +16,9 @@ use url::Url;
 pub struct RocketChat<U: WebSocketWriter + Send + Sync> {
     tx_ui: Sender<UIEvent>,
     ws: U,
-    ws_reader: Receiver<tungstenite::Message>,
+    rx_ws: Receiver<tungstenite::Message>,
     ponger: Sender<tungstenite::Message>,
-    ui_rx: Receiver<ChatEvent>,
+    rx_chat: Receiver<ChatEvent>,
     username: String,
     current_channel: Mutex<Option<Channel>>,
 }
@@ -29,7 +29,7 @@ where
 {
     async fn wait_messages_loop(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
         loop {
-            let msg = self.ws_reader.recv().await?;
+            let msg = self.rx_ws.recv().await?;
             if let Ok(resp) = serde_json::from_str::<WsResponse>(&format!("{}", msg)[..]) {
                 match resp {
                     WsResponse::NewMessage(SocketMessageWs {
@@ -43,7 +43,7 @@ where
                         let channel = match t {
                             x if x == "d" => Channel::User(last_message.rid.clone()),
                             x if x == "p" => Channel::Private(last_message.rid.clone()),
-                            _ => Channel::Group(last_message.rid.clone())
+                            _ => Channel::Group(last_message.rid.clone()),
                         };
                         self.add_message(
                             Message {
@@ -123,7 +123,7 @@ where
 
     async fn ui_event_loop(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
         loop {
-            match self.ui_rx.recv().await {
+            match self.rx_chat.recv().await {
                 Ok(ChatEvent::SendMessage(message, channel)) => {
                     let split = message.split(' ').collect::<Vec<&str>>();
                     if message.starts_with("/direct") && split.len() > 1 {
@@ -150,7 +150,7 @@ impl RocketChat<RocketChatWsWriter> {
         username: String,
         password: String,
         tx_ui: Sender<UIEvent>,
-        ui_rx: Receiver<ChatEvent>,
+        rx_chat: Receiver<ChatEvent>,
     ) -> Result<Self, Box<dyn Error + Send + Sync>> {
         let mut ws_host = host.clone();
         ws_host
@@ -158,17 +158,17 @@ impl RocketChat<RocketChatWsWriter> {
             .map_err(|err| format!("{:?}", err))?;
         ws_host.set_path("/websocket");
         let (socket, _) = tokio_tungstenite::connect_async(ws_host).await?;
-        let (ws_writer, rxws) = async_channel::unbounded();
-        let ponger = ws_writer.clone();
-        let (txws, ws_reader) = async_channel::unbounded();
+        let (tx_ws, rx_forwarder_ws) = unbounded();
+        let ponger = tx_ws.clone();
+        let (tx_forwarder_ws, rx_ws) = unbounded();
         let (write, mut read) = socket.split();
-        tokio::spawn(rxws.map(Ok).forward(write));
+        tokio::spawn(rx_forwarder_ws.map(Ok).forward(write));
         tokio::spawn(async move {
             loop {
                 let msg = read.next().await;
                 match msg {
                     Some(Ok(msg)) => {
-                        if let Err(err) = txws.send(msg).await {
+                        if let Err(err) = tx_forwarder_ws.send(msg).await {
                             error!("Error when sending to ws sender: {}", err);
                             break;
                         }
@@ -184,13 +184,13 @@ impl RocketChat<RocketChatWsWriter> {
                 }
             }
         });
-        let ws = RocketChatWsWriter::new(username.clone(), password, ws_writer, &ws_reader).await?;
+        let ws = RocketChatWsWriter::new(username.clone(), password, tx_ws, &rx_ws).await?;
         Ok(RocketChat {
             tx_ui,
             ws,
-            ws_reader,
+            rx_ws,
             ponger,
-            ui_rx,
+            rx_chat,
             username,
             current_channel: Mutex::new(None),
         })
@@ -393,7 +393,7 @@ mod tests {
             host: Url,
             username: String,
             tx_ui: Sender<UIEvent>,
-            ui_rx: Receiver<ChatEvent>,
+            rx_ui: Receiver<ChatEvent>,
             ws: FakeWsWriter,
         ) -> Result<(Self, Sender<tungstenite::Message>), Box<dyn Error + Send + Sync>> {
             let mut ws_host = host.clone();
@@ -401,20 +401,20 @@ mod tests {
                 .set_scheme("ws")
                 .map_err(|err| format!("{:?}", err))?;
             ws_host.set_path("/websocket");
-            let (ws_writer, _) = async_channel::unbounded();
-            let ponger = ws_writer.clone();
-            let (txws, ws_reader) = async_channel::unbounded();
+            let (tx_ws, _) = unbounded();
+            let ponger = tx_ws.clone();
+            let (tx_forwarder_ws, rx_ws) = unbounded();
             Ok((
                 RocketChat {
                     tx_ui,
                     ws,
-                    ws_reader,
+                    rx_ws,
                     ponger,
-                    ui_rx: ui_rx.clone(),
+                    rx_chat: rx_ui,
                     username,
                     current_channel: Mutex::new(Some(Channel::Group("test_channel".to_string()))),
                 },
-                txws,
+                tx_forwarder_ws,
             ))
         }
     }
@@ -429,17 +429,17 @@ mod tests {
             call_map: Arc::new(Mutex::new(HashMap::new())),
         };
         let cloned_ws = ws.clone();
-        let (_, rx) = async_channel::unbounded();
-        let (tx_ui, rx_ui) = async_channel::unbounded();
-        let (chat, txws) = RocketChat::<FakeWsWriter>::new(
+        let (_, rx_ws) = unbounded();
+        let (tx_ui, rx_ui) = unbounded();
+        let (chat, tx_ws) = RocketChat::<FakeWsWriter>::new(
             Url::parse("http://localhost").unwrap(),
             "usertest".into(),
             tx_ui,
-            rx,
+            rx_ws,
             ws,
         )
         .unwrap();
-        (cloned_ws, rx_ui, chat, txws)
+        (cloned_ws, rx_ui, chat, tx_ws)
     }
 
     #[tokio::test]
@@ -531,11 +531,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_recv_message() {
-        let (_, rx_ui, chat, txws) = create_chat_system();
+        let (_, rx_ui, chat, tx_forwarder_ws) = create_chat_system();
         let message_str =
             std::include_str!("../../../tests/data/test_recv_message.json").to_string();
         let message_loop = chat.wait_messages_loop();
-        txws.send(tungstenite::Message::Text(message_str))
+        tx_forwarder_ws
+            .send(tungstenite::Message::Text(message_str))
             .await
             .unwrap();
         let msg = rx_ui.recv();
@@ -552,21 +553,22 @@ mod tests {
 
     #[tokio::test]
     async fn test_recv_history() {
-        let (_, rx_ui, chat, txws) = create_chat_system();
+        let (_, rx_ui, chat, tx_forwarder_ws) = create_chat_system();
         let message_str =
             std::include_str!("../../../tests/data/test_recv_history.json").to_string();
         let expected_str =
             std::include_str!("../../../tests/data/test_recv_history.txt").to_string();
         let message_loop = chat.wait_messages_loop();
-        txws.send(tungstenite::Message::Text(message_str))
+        tx_forwarder_ws
+            .send(tungstenite::Message::Text(message_str))
             .await
             .unwrap();
         let msg = rx_ui.recv();
         tokio::select! {
             Ok(UIEvent::UpdateMessages(messages)) = msg => {
                 assert_eq!(
-                    format!("{}", messages),
-                    expected_str.to_string()
+                    format!("{}", messages).trim(),
+                    expected_str.to_string().trim()
                 );
             },
             _ = message_loop => {panic!("Abnormal")},
@@ -575,11 +577,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_recv_rooms() {
-        let (_, rx_ui, chat, txws) = create_chat_system();
+        let (_, rx_ui, chat, tx_forwarder_ws) = create_chat_system();
         let message_str = std::include_str!("../../../tests/data/test_recv_rooms.json").to_string();
         let expected_str = std::include_str!("../../../tests/data/test_recv_rooms.txt").to_string();
         let message_loop = chat.wait_messages_loop();
-        txws.send(tungstenite::Message::Text(message_str))
+        tx_forwarder_ws
+            .send(tungstenite::Message::Text(message_str))
             .await
             .unwrap();
 
@@ -597,13 +600,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_recv_users_in_room() {
-        let (_, rx_ui, chat, txws) = create_chat_system();
+        let (_, rx_ui, chat, tx_forwarder_ws) = create_chat_system();
         let message_str =
             std::include_str!("../../../tests/data/test_recv_users_in_room.json").to_string();
         let expected_str =
             std::include_str!("../../../tests/data/test_recv_users_in_room.txt").to_string();
         let message_loop = chat.wait_messages_loop();
-        txws.send(tungstenite::Message::Text(message_str))
+        tx_forwarder_ws
+            .send(tungstenite::Message::Text(message_str))
             .await
             .unwrap();
         let msg = rx_ui.recv();

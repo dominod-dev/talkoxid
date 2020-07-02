@@ -1,4 +1,4 @@
-use async_channel::{bounded, unbounded};
+use async_channel::{bounded, unbounded, Receiver, Sender};
 use clap::{load_yaml, App};
 use log::{error, info};
 use std::error::Error;
@@ -14,9 +14,9 @@ use tokio::runtime::Runtime;
 use url::Url;
 
 async fn chat_loop(
-    rx: async_channel::Receiver<ChatEvent>,
-    close_rx: async_channel::Receiver<()>,
-    tx_ui: async_channel::Sender<UIEvent>,
+    rx_chat: Receiver<ChatEvent>,
+    rx_close: Receiver<()>,
+    tx_ui: Sender<UIEvent>,
     config: ChatConfig,
 ) {
     match RocketChat::new(
@@ -24,7 +24,7 @@ async fn chat_loop(
         config.username,
         config.password,
         tx_ui.clone(),
-        rx,
+        rx_chat,
     )
     .await
     {
@@ -38,7 +38,7 @@ async fn chat_loop(
                     error!("The websocket loop crashed!")
                 }
 
-                _ = close_rx.recv() => {
+                _ = rx_close.recv() => {
                     info!("Disconnecting!")
                 }
             };
@@ -46,7 +46,7 @@ async fn chat_loop(
         Err(err) => {
             let err = format!("{}", err);
             tx_ui.send(UIEvent::ShowFatalError(err)).await.unwrap();
-            close_rx.recv().await.unwrap();
+            rx_close.recv().await.unwrap();
         }
     }
 }
@@ -62,21 +62,24 @@ fn main() -> Result<(), Box<dyn Error>> {
         matches.value_of("hostname"),
     );
 
-    let (tx, rx) = unbounded();
+    // Channel used to communicate from ui to chat
+    let (tx_chat, rx_chat) = unbounded();
+    // Channel used to communicate from chat to ui
     let (tx_ui, rx_ui) = unbounded();
-    let (close_tx, close_rx) = bounded(1);
+    // Channel used to terminate chat
+    let (tx_close, rx_close) = bounded(1);
 
     let rt = Runtime::new().unwrap();
     let handle = rt.handle().clone();
-    let ui = CursiveUI::new(tx, rx_ui);
+    let ui = CursiveUI::new(tx_chat, rx_ui);
     let th = thread::spawn(move || {
-        handle.block_on(chat_loop(rx, close_rx, tx_ui, config));
+        handle.block_on(chat_loop(rx_chat, rx_close, tx_ui, config));
     });
 
     ui.start_loop().unwrap();
 
     rt.handle()
-        .block_on(async { close_tx.send(()).await.unwrap() });
+        .block_on(async { tx_close.send(()).await.unwrap() });
     th.join().unwrap();
 
     Ok(())

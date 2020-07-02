@@ -1,5 +1,6 @@
 pub mod views;
 use super::super::{Channel, ChatEvent, Message, UIEvent, UI};
+use async_channel::{Receiver, Sender};
 use cursive::traits::*;
 use cursive::view::ScrollStrategy;
 use cursive::views::{LinearLayout, SelectView, TextView};
@@ -42,11 +43,9 @@ fn format_channel(channels: Vec<(String, Channel)>) -> Vec<(String, Channel)> {
     chats
 }
 
-fn on_channel_changed(
-    tx: async_channel::Sender<ChatEvent>,
-) -> impl Fn(&mut Cursive, &Channel) -> () {
+fn on_channel_changed(tx_chat: Sender<ChatEvent>) -> impl Fn(&mut Cursive, &Channel) -> () {
     move |siv: &mut Cursive, item: &Channel| {
-        tx.try_send(ChatEvent::Init(item.clone())).unwrap();
+        tx_chat.try_send(ChatEvent::Init(item.clone())).unwrap();
         siv.focus_name("input").unwrap();
     }
 }
@@ -54,11 +53,11 @@ fn on_channel_changed(
 pub struct CursiveUI {
     cb_sink: CbSink,
     siv: RefCell<Cursive>,
-    rx: async_channel::Receiver<UIEvent>,
+    rx_ui: Receiver<UIEvent>,
 }
 
 impl CursiveUI {
-    pub fn new(tx: async_channel::Sender<ChatEvent>, rx: async_channel::Receiver<UIEvent>) -> Self {
+    pub fn new(tx_chat: Sender<ChatEvent>, rx_ui: Receiver<UIEvent>) -> Self {
         let mut siv = cursive::default();
 
         let cb_sink = siv.cb_sink().clone();
@@ -70,10 +69,10 @@ impl CursiveUI {
             .scrollable()
             .scroll_strategy(ScrollStrategy::StickToBottom)
             .with_name("scroll");
-        let message_input_box = MessageBoxView::new(None, tx.clone()).with_name("input");
+        let message_input_box = MessageBoxView::new(None, tx_chat.clone()).with_name("input");
 
         let channel_list = ChannelView::new()
-            .on_submit(on_channel_changed(tx))
+            .on_submit(on_channel_changed(tx_chat))
             .with_name("channel_list")
             .scrollable();
         let users_list = SelectView::<String>::new()
@@ -101,7 +100,7 @@ impl CursiveUI {
         CursiveUI {
             cb_sink,
             siv: RefCell::new(siv),
-            rx,
+            rx_ui,
         }
     }
 }
@@ -111,7 +110,7 @@ impl UI for CursiveUI {
         let mut siv = self.siv.borrow_mut();
         while siv.is_running() {
             siv.step();
-            match self.rx.try_recv() {
+            match self.rx_ui.try_recv() {
                 Ok(UIEvent::AddMessages(msg)) => self.add_message(msg)?,
                 Ok(UIEvent::UpdateChannels(channels)) => self.update_channels(channels)?,
                 Ok(UIEvent::UpdateMessages(messages)) => self.update_messages(messages)?,
