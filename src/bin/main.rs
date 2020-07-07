@@ -36,6 +36,15 @@ async fn chat_loop(
     }
     Ok(())
 }
+
+fn ui_loop(
+    tx_chat: Sender<ChatEvent>,
+    rx_ui: Receiver<UIEvent>,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let ui = CursiveUI::new(tx_chat, rx_ui);
+    ui.start_loop()?;
+    Ok(())
+}
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     log4rs::init_file("config/log4rs.yaml", Default::default())?;
@@ -53,13 +62,10 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     // Channel used to communicate from chat to ui
     let (tx_ui, rx_ui) = unbounded();
 
-    let ui = tokio::task::spawn_blocking(move || {
-        let ui = CursiveUI::new(tx_chat, rx_ui);
-        ui.start_loop().unwrap();
-    });
+    let ui = tokio::task::spawn_blocking(|| ui_loop(tx_chat, rx_ui));
     let chat = tokio::task::spawn(chat_loop(rx_chat, tx_ui, config));
 
-    ui.await?;
+    ui.await??;
     chat.await??;
     Ok(())
 }
