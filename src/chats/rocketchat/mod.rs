@@ -13,6 +13,9 @@ use std::sync::Mutex;
 use tokio_tungstenite::tungstenite;
 use url::Url;
 
+/// RocketChat chat system.
+///
+/// This type is a chat system implementation for RocketChat.
 pub struct RocketChat<U: WebSocketWriter + Send + Sync> {
     tx_ui: Sender<UIEvent>,
     ws: U,

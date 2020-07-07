@@ -50,6 +50,9 @@ fn on_channel_changed(tx_chat: Sender<ChatEvent>) -> impl Fn(&mut Cursive, &Chan
     }
 }
 
+/// Cursive UI.
+///
+/// This type is a terminal user interface using the cursive library.
 pub struct CursiveUI {
     cb_sink: CbSink,
     siv: RefCell<Cursive>,

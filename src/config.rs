@@ -1,3 +1,7 @@
+//! Configuration module.
+//!
+//! This module contains the logic to resolve
+//! the configuration.
 use serde::Deserialize;
 
 #[derive(Deserialize, Debug)]
@@ -7,12 +11,20 @@ struct TomlConfig {
     hostname: Option<String>,
 }
 
+/// Chat configuration.
+///
+/// This type contains all parameters a chat system need
+/// to operate.
 pub struct ChatConfig {
+    /// The User's username.
     pub username: String,
+    /// The User's password.
     pub password: String,
+    /// The Chat Hostname.
     pub hostname: String,
 }
 
+/// Resolve config between runtime provided parameters and configuration file.
 pub fn load_config(
     username: Option<&str>,
     password: Option<&str>,
