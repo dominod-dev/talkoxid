@@ -9,10 +9,16 @@ use chrono::{DateTime, Utc};
 use std::error::Error;
 use std::fmt;
 
+/// Message representation.
+///
+/// This type represent a message in a chat.
 #[derive(Eq, PartialEq, PartialOrd, Clone, Debug)]
 pub struct Message {
+    /// The message's author.
     pub author: String,
+    /// The content of the message.
     pub content: String,
+    /// The date and time of when the message was sent.
     pub datetime: DateTime<Utc>,
 }
 
@@ -53,10 +59,18 @@ impl fmt::Display for UIError {
 
 impl Error for UIError {}
 
+/// Channel representation
+///
+/// This type represent a channel in a chat.
+///
+/// A channel is a place where user can send message to.
 #[derive(Eq, PartialEq, PartialOrd, Clone, Debug)]
 pub enum Channel {
+    /// A public group channel.
     Group(String),
+    /// A direct message to one or more users.
     User(String),
+    /// A private group channel.
     Private(String),
 }
 
@@ -86,19 +100,79 @@ impl Ord for Channel {
     }
 }
 
+/// Events sent to the chat system.
+///
+/// This enum represent all the events that a chat system
+/// can receive.
+///
+/// Those events are sent from the UI via a channel to the chat system.
+///
+/// # Examples
+///
+/// ```no_run
+/// # use std::error::Error;
+/// use talkoxid::{ChatEvent, Channel};
+/// use async_channel::unbounded;
+///
+/// # async fn send_hello_world() -> Result<(), Box<dyn Error + Send + Sync>> {
+/// let (tx_chat, rx_chat) = unbounded();
+/// tx_chat.send(
+///     ChatEvent::SendMessage(
+///         "Hello world!".to_string(),
+///         Channel::Group("GENERAL".to_string())
+///     )
+/// ).await?;
+/// # Ok(())
+/// # }
+/// ```
+///
 #[derive(Eq, PartialEq, PartialOrd, Clone, Debug)]
 pub enum ChatEvent {
+    /// Used when the User send a message.
     SendMessage(String, Channel),
+    /// Used when the User select a channel the first time
+    /// or when he change the currently selected channel.
     Init(Channel),
 }
 
+/// Events sent to the User Interface.
+///
+/// This enum represent all the events that an UI
+/// can receive.
+///
+/// Those events are sent from the chat system via a channel to the UI.
+///
+/// # Examples
+///
+/// ```no_run
+/// # use std::error::Error;
+/// use talkoxid::{UIEvent, Channel};
+/// use async_channel::unbounded;
+///
+/// # async fn send_hello_world() -> Result<(), Box<dyn Error + Send + Sync>> {
+/// let (tx_ui, rx_ui) = unbounded();
+/// tx_ui.send(
+///     UIEvent::SelectChannel(
+///         Channel::Group("GENERAL".to_string())
+///     )
+/// ).await?;
+/// # Ok(())
+/// # }
+/// ```
+///
 #[derive(Eq, PartialEq, PartialOrd, Clone, Debug)]
 pub enum UIEvent {
+    /// Used when the messages feed list change.
     UpdateMessages(String),
+    /// Used when the channel list change.
     UpdateChannels(Vec<(String, Channel)>),
+    /// Used when the users in a room/channel change.
     UpdateUsersInRoom(Vec<(String, String)>),
+    /// Used when a message is received and need to be displayed.
     AddMessages(Message),
+    /// Used when we select a new channel.
     SelectChannel(Channel),
+    /// Used when a fatal error occurred and need to be displayed.
     ShowFatalError(String),
 }
 
