@@ -176,6 +176,9 @@ pub enum UIEvent {
     ShowFatalError(String),
 }
 
+/// Chat system trait
+///
+/// All chat backends should implement this trait.
 #[async_trait]
 pub trait Chat {
     async fn init_view(&self, channel: Channel) -> Result<(), Box<dyn Error + Send + Sync>>;
@@ -189,9 +192,14 @@ pub trait Chat {
         message: Message,
         channel: &Channel,
     ) -> Result<(), Box<dyn Error + Send + Sync>>;
+    /// Start the main loop that listen to [ChatEvent](enum.ChatEvent.html)
     async fn start_loop(&self) -> Result<(), Box<dyn Error + Send + Sync>>;
 }
 
+
+/// User Interface trait.
+///
+/// All UI backends should implement this trait.
 pub trait UI {
     fn update_messages(&self, content: String) -> Result<(), Box<dyn Error + Send + Sync>>;
     fn update_channels(
@@ -205,5 +213,6 @@ pub trait UI {
     fn add_message(&self, message: Message) -> Result<(), Box<dyn Error + Send + Sync>>;
     fn select_channel(&self, channel: Channel) -> Result<(), Box<dyn Error + Send + Sync>>;
     fn show_fatal_error(&self, content: String) -> Result<(), Box<dyn Error + Send + Sync>>;
+    /// Start the main loop that listen to [UIEvent](enum.UIEvent.html)
     fn start_loop(&self) -> Result<(), Box<dyn Error + Send + Sync>>;
 }
