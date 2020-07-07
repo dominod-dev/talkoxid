@@ -89,7 +89,6 @@ impl Ord for Channel {
 #[derive(Eq, PartialEq, PartialOrd, Clone, Debug)]
 pub enum ChatEvent {
     SendMessage(String, Channel),
-    RecvMessage(Message, Channel),
     Init(Channel),
 }
 

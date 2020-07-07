@@ -130,9 +130,6 @@ where
                 ChatEvent::Init(channel) => {
                     self.init_view(channel).await?;
                 }
-                ChatEvent::RecvMessage(message, channel) => {
-                    self.add_message(message, &channel).await?;
-                }
             };
         }
     }
