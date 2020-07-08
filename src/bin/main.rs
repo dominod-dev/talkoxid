@@ -4,8 +4,7 @@ use std::error::Error;
 use talkoxid::chats::RocketChat;
 use talkoxid::config::{load_config, ChatConfig};
 use talkoxid::ui::CursiveUI;
-use talkoxid::{Channel, ChatEvent, UIEvent};
-use talkoxid::{Chat, UI};
+use talkoxid::core::{Chat, UI, Channel, ChatEvent, UIEvent};
 
 use url::Url;
 

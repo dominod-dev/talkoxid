@@ -1,7 +1,7 @@
 mod api;
 mod schema;
 
-use super::super::{Channel, Chat, ChatEvent, Message, UIEvent};
+use super::super::core::{Channel, Chat, ChatEvent, Message, UIEvent};
 use api::{RocketChatWsWriter, WebSocketWriter};
 use async_channel::{unbounded, Receiver, Sender};
 use async_trait::async_trait;

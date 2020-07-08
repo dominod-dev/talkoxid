@@ -1,5 +1,5 @@
 pub mod views;
-use super::super::{Channel, ChatEvent, Message, UIEvent, UI};
+use super::super::core::{Channel, ChatEvent, Message, UIEvent, UI};
 use async_channel::{Receiver, Sender};
 use cursive::traits::*;
 use cursive::view::ScrollStrategy;
