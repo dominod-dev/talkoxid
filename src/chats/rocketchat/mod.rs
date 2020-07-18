@@ -83,7 +83,7 @@ where
                                     let all_usernames = usernames
                                         .iter()
                                         .cloned()
-                                        .filter(|x| x != &self.username)
+                                        .filter(|x| x != &self.username || usernames.len() == 1)
                                         .collect::<Vec<String>>()
                                         .join(",");
                                     (all_usernames, Channel::User(_id.clone()))
