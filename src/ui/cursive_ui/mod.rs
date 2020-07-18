@@ -205,8 +205,16 @@ impl UI for CursiveUI {
     fn select_channel(&self, channel: Channel) -> Result<(), Box<dyn Error + Send + Sync>> {
         self.cb_sink
             .send(Box::new(|siv: &mut Cursive| {
-                siv.call_on_name("input", move |view: &mut MessageBoxView| {
-                    view.channel = Some(channel);
+                siv.call_on_name("input", |view: &mut MessageBoxView| {
+                    view.channel = Some(channel.clone());
+                });
+                siv.call_on_name("channel_list", move |view: &mut ChannelView| {
+                    let index = view
+                        .view
+                        .iter()
+                        .position(|x| &x.1 == &&channel)
+                        .unwrap_or_default();
+                    view.view.set_selection(index);
                 });
             }))
             .map_err(|err| UIError {

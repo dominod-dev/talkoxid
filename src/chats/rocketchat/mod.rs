@@ -98,9 +98,17 @@ where
                             .collect::<Vec<(String, Channel)>>();
                         self.tx_ui.send(UIEvent::UpdateChannels(channels)).await?;
                     }
-                    WsResponse::JoinedRoom { id, result, .. } if id == "5" => {
-                        self.init_view(Channel::Group(result.rid)).await?;
-                    }
+                    WsResponse::JoinedRoom { id, result, .. } if id == "5" => match result {
+                        JoinedRoomResponseWs::Direct(result) => {
+                            self.init_view(Channel::User(result.rid.clone())).await?;
+                        }
+                        JoinedRoomResponseWs::Chat(result) => {
+                            self.init_view(Channel::Group(result.rid.clone())).await?;
+                        }
+                        JoinedRoomResponseWs::Private(result) => {
+                            self.init_view(Channel::Private(result.rid.clone())).await?;
+                        }
+                    },
                     WsResponse::UsersInRoom { id, result, .. } if id == "8" => {
                         let users = result
                             .records

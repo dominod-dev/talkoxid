@@ -128,8 +128,19 @@ pub struct RoomsResponseWs {
 }
 
 #[derive(Deserialize, Debug)]
-pub struct JoinedRoomResponseWs {
+pub struct ResultRoomResponseWs {
     pub rid: String,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(tag = "t")]
+pub enum JoinedRoomResponseWs {
+    #[serde(rename = "d")]
+    Direct(ResultRoomResponseWs),
+    #[serde(rename = "c")]
+    Chat(ResultRoomResponseWs),
+    #[serde(rename = "p")]
+    Private(ResultRoomResponseWs),
 }
 
 #[derive(Deserialize, Debug)]

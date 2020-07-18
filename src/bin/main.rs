@@ -3,8 +3,8 @@ use clap::{load_yaml, App};
 use std::error::Error;
 use talkoxid::chats::RocketChat;
 use talkoxid::config::{load_config, ChatConfig};
+use talkoxid::core::{Channel, Chat, ChatEvent, UIEvent, UI};
 use talkoxid::ui::CursiveUI;
-use talkoxid::core::{Chat, UI, Channel, ChatEvent, UIEvent};
 
 use url::Url;
 

@@ -195,7 +195,6 @@ pub trait Chat {
     async fn start_loop(&self) -> Result<(), Box<dyn Error + Send + Sync>>;
 }
 
-
 /// User Interface trait.
 ///
 /// All UI backends should implement this trait.
