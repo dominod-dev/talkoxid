@@ -1,9 +1,9 @@
 use super::schema::*;
 use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
+use async_tungstenite::tungstenite;
 use sha2::{Digest, Sha256};
 use std::error::Error;
-use tokio_tungstenite::tungstenite;
 
 #[async_trait]
 pub trait WebSocketWriter {
@@ -44,7 +44,7 @@ pub struct RocketChatWsWriter {
     username: String,
     password_digest: String,
     user_id: String,
-    websocket: Sender<tokio_tungstenite::tungstenite::Message>,
+    websocket: Sender<tungstenite::Message>,
 }
 
 impl RocketChatWsWriter {
