@@ -9,6 +9,7 @@ struct TomlConfig {
     username: Option<String>,
     password: Option<String>,
     hostname: Option<String>,
+    ssl_verify: Option<bool>,
 }
 
 /// Chat configuration.
@@ -22,6 +23,8 @@ pub struct ChatConfig {
     pub password: String,
     /// The Chat Hostname.
     pub hostname: String,
+    /// Wheter we verify ssl certificates or not
+    pub ssl_verify: bool,
 }
 
 /// Resolve config between runtime provided parameters and configuration file.
@@ -29,6 +32,7 @@ pub fn load_config(
     username: Option<&str>,
     password: Option<&str>,
     hostname: Option<&str>,
+    ssl_verify_present: bool,
 ) -> ChatConfig {
     let mut config_path = dirs_next::config_dir().unwrap();
     config_path.push("talkoxid");
@@ -48,9 +52,11 @@ pub fn load_config(
         .map(|x| x.to_string())
         .or(config.hostname)
         .expect("Error no hostname provided");
+    let ssl_verify = !ssl_verify_present && config.ssl_verify.unwrap_or(true);
     ChatConfig {
         username,
         password,
         hostname,
+        ssl_verify,
     }
 }

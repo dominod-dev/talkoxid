@@ -151,6 +151,7 @@ impl RocketChat<RocketChatWsWriter> {
         host: Url,
         username: String,
         password: String,
+        ssl_verify: bool,
         tx_ui: Sender<UIEvent>,
         rx_chat: Receiver<ChatEvent>,
     ) -> Result<Self, Box<dyn Error + Send + Sync>> {

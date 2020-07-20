@@ -21,3 +21,8 @@ args:
         value_name: HOST
         help: "Your chat hostname with port. Example: https://mychat.net:1234"
         takes_value: true
+    - disable_ssl_verify:
+        short: k
+        long: disable_ssl_verify
+        help: "Disable ssl certificates verification"
+        takes_value: false

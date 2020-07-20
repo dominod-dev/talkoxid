@@ -17,6 +17,7 @@ async fn chat_loop(
         Url::parse(&config.hostname).unwrap_or_else(|err| panic!("Bad url :{:?}", err)),
         config.username,
         config.password,
+        config.ssl_verify,
         tx_ui.clone(),
         rx_chat,
     )
@@ -54,6 +55,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
         matches.value_of("username"),
         matches.value_of("password"),
         matches.value_of("hostname"),
+        matches.is_present("disable_ssl_verify"),
     );
 
     // Channel used to communicate from ui to chat
