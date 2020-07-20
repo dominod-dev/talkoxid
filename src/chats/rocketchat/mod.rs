@@ -5,13 +5,36 @@ use super::super::core::{Channel, Chat, ChatEvent, Message, UIEvent};
 use api::{RocketChatWsWriter, WebSocketWriter};
 use async_channel::{unbounded, Receiver, Sender};
 use async_trait::async_trait;
+use async_tungstenite::tungstenite;
 use futures_util::StreamExt;
 use log::error;
 use schema::*;
 use std::error::Error;
 use std::sync::Mutex;
-use tokio_tungstenite::tungstenite;
+use tokio_native_tls::TlsConnector;
 use url::Url;
+
+fn resolve_ws_url(
+    mut url: Url,
+    ssl_verify: bool,
+) -> Result<(Url, Option<TlsConnector>), Box<dyn Error + Send + Sync>> {
+    let (scheme, tls_config) = match url.scheme() {
+        "https" => {
+            let mut tls_builder = native_tls::TlsConnector::builder();
+            if !ssl_verify {
+                tls_builder
+                    .danger_accept_invalid_certs(true)
+                    .danger_accept_invalid_hostnames(true);
+            }
+            let tls_config = TlsConnector::from(tls_builder.build()?);
+            ("wss", Some(tls_config))
+        }
+        _ => ("ws", None),
+    };
+    url.set_scheme(scheme).map_err(|err| format!("{:?}", err))?;
+    url.set_path("/websocket");
+    Ok((url, tls_config))
+}
 
 /// RocketChat chat system.
 ///
@@ -155,12 +178,9 @@ impl RocketChat<RocketChatWsWriter> {
         tx_ui: Sender<UIEvent>,
         rx_chat: Receiver<ChatEvent>,
     ) -> Result<Self, Box<dyn Error + Send + Sync>> {
-        let mut ws_host = host.clone();
-        ws_host
-            .set_scheme("ws")
-            .map_err(|err| format!("{:?}", err))?;
-        ws_host.set_path("/websocket");
-        let (socket, _) = tokio_tungstenite::connect_async(ws_host).await?;
+        let (ws_host, tls_config) = resolve_ws_url(host.clone(), ssl_verify)?;
+        let (socket, _) =
+            async_tungstenite::tokio::connect_async_with_tls_connector(ws_host, tls_config).await?;
         let (tx_ws, rx_forwarder_ws) = unbounded();
         let ponger = tx_ws.clone();
         let (tx_forwarder_ws, rx_ws) = unbounded();
