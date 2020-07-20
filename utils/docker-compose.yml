@@ -48,3 +48,12 @@ services:
         done; (exit $$s)"
     depends_on:
       - mongo
+
+  nginx:
+    image: nginx
+    restart: unless-stopped
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./certs:/certs
+    ports:
+        - 443:443
