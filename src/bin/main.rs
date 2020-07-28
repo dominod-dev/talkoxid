@@ -6,6 +6,11 @@ use talkoxid::config::{load_config, ChatConfig};
 use talkoxid::core::{Channel, Chat, ChatEvent, UIEvent, UI};
 use talkoxid::ui::CursiveUI;
 
+use log::LevelFilter;
+use log4rs::append::console::ConsoleAppender;
+use log4rs::append::file::FileAppender;
+use log4rs::config::{Appender, Config, Root};
+
 use url::Url;
 
 async fn chat_loop(
@@ -47,7 +52,15 @@ fn ui_loop(
 }
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
-    log4rs::init_file("config/log4rs.yaml", Default::default())?;
+    let stdout = ConsoleAppender::builder().build();
+    let file = FileAppender::builder().build("/tmp/talkoxid.log").unwrap();
+    let config = Config::builder()
+        .appender(Appender::builder().build("stdout", Box::new(stdout)))
+        .appender(Appender::builder().build("file", Box::new(file)))
+        .build(Root::builder().appender("file").build(LevelFilter::Info))
+        .unwrap();
+    log4rs::init_config(config)?;
+    log::info!("Starting talkoxid");
     let yaml = load_yaml!("../../config/cli.yaml");
     let matches = App::from_yaml(yaml).get_matches();
 
