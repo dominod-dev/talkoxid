@@ -4,30 +4,46 @@ mod schema;
 use super::super::core::{Channel, Chat, ChatEvent, Message, UIEvent};
 use api::{RocketChatWsWriter, WebSocketWriter};
 use async_channel::{unbounded, Receiver, Sender};
+use async_tls::TlsConnector;
 use async_trait::async_trait;
 use async_tungstenite::tungstenite;
 use futures_util::StreamExt;
 use log::error;
 use schema::*;
 use std::error::Error;
-use std::sync::Mutex;
-use tokio_native_tls::TlsConnector;
+use std::sync::{Arc, Mutex};
 use url::Url;
+use webpki_roots;
 
+struct NoCertificateVerification {}
+
+impl rustls::ServerCertVerifier for NoCertificateVerification {
+    fn verify_server_cert(
+        &self,
+        _roots: &rustls::RootCertStore,
+        _presented_certs: &[rustls::Certificate],
+        _dns_name: webpki::DNSNameRef<'_>,
+        _ocsp: &[u8],
+    ) -> Result<rustls::ServerCertVerified, rustls::TLSError> {
+        Ok(rustls::ServerCertVerified::assertion())
+    }
+}
 fn resolve_ws_url(
     mut url: Url,
     ssl_verify: bool,
 ) -> Result<(Url, Option<TlsConnector>), Box<dyn Error + Send + Sync>> {
     let (scheme, tls_config) = match url.scheme() {
         "https" => {
-            let mut tls_builder = native_tls::TlsConnector::builder();
+            let mut tls_builder = rustls::ClientConfig::new();
+            tls_builder
+                .root_store
+                .add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
             if !ssl_verify {
                 tls_builder
-                    .danger_accept_invalid_certs(true)
-                    .danger_accept_invalid_hostnames(true);
+                    .dangerous()
+                    .set_certificate_verifier(Arc::new(NoCertificateVerification {}));
             }
-            let tls_config = TlsConnector::from(tls_builder.build()?);
-            ("wss", Some(tls_config))
+            ("wss", Some(tls_builder.into()))
         }
         _ => ("ws", None),
     };
