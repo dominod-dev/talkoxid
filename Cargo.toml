@@ -10,27 +10,33 @@ path = "src/bin/main.rs"
 name = "talkoxid"
 
 [dependencies]
-serde_json = "1.0"
-serde = { version = "1.0", features = ["derive"] }
-async-tungstenite = { version = "0.8", features = ["tokio-runtime", "async-tls"] }
-async-tls = "0.9"
-rustls = { version = "0.18", features = ["dangerous_configuration"] }
-url = "2.1.0"
-webpki-roots = "0.20.0"
-webpki = "0.21"
-sha2 = "0.9.0"
-tokio = { version = "0.2", features = ["rt-threaded", "macros", "time", "blocking"] }
-async-trait = "0.1"
-futures-util = "0.3"
-async-channel = "1.1"
-log4rs = "0.12"
-log = "0.4"
-chrono = { version = "0.4", features = ["serde"] }
-clap = { version = "2.33", features = ["yaml"] }
-toml = "0.5"
-dirs-next = "1.0"
+serde_json = { version = "^1.0", default-features=false, features=["std"] }
+serde = { version = "^1.0", features = ["derive"], default-features=false }
+async-tungstenite = { version = "^0.8", default-features=false, features = ["tokio-runtime", "async-tls"] }
+async-tls = { version = "^0.9", default-features=false }
+rustls = { version = "^0.18", default-features=false, features = ["dangerous_configuration"] }
+url = { version = "^2.1.0", default-features=false }
+webpki-roots = { version = "^0.20.0", default-features=false }
+webpki = { version = "^0.21", default-features=false }
+sha2 = { version = "^0.9.0", default-features=false }
+tokio = { version = "^0.2", default-features=false, features = ["rt-threaded", "macros", "blocking"] }
+async-trait = { version = "^0.1", default-features=false }
+futures-util = { version = "^0.3", default-features=false }
+async-channel = { version = "^1.1", default-features=false }
+log4rs = { version = "^0.12", default-features=false, features=["console_appender", "file_appender"] }
+log = { version = "^0.4", default-features=false }
+chrono = { version = "^0.4", default-features=false, features = ["serde"] }
+clap = { version = "^2.33", default-features=false, features = ["yaml"] }
+toml = { version = "^0.5", default-features=false }
+dirs-next = { version = "^1.0", default-features=false }
 
-[dependencies.cursive]
-version = "0.15"
+[target.'cfg(windows)'.dependencies.cursive]
+version = "^0.15"
 default-features = false
-features = ["toml", "ncurses-backend"]
+features = ["toml", "crossterm-backend"]
+
+
+[target.'cfg(unix)'.dependencies.cursive]
+version = "^0.15"
+default-features = false
+features = ["toml", "termion-backend"]
