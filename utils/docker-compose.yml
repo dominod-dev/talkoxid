@@ -50,10 +50,7 @@ services:
       - mongo
 
   nginx:
-    image: nginx
+    build: ./nginx-ssl
     restart: unless-stopped
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf
-      - ./certs:/certs
     ports:
         - 443:443
