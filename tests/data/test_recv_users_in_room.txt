@@ -1,1 +1,1 @@
-[("admin", "wqJNPhCkTEnGpKtL3"), ("collkid", "e6eW7qYFRqABby8sx")]
+[("admin", "admin"), ("collkid", "collkid")]

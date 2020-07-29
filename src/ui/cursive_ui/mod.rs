@@ -62,6 +62,7 @@ pub struct CursiveUI {
 impl CursiveUI {
     pub fn new(tx_chat: Sender<ChatEvent>, rx_ui: Receiver<UIEvent>) -> Self {
         let mut siv = cursive::default();
+        let tx_chat2 = tx_chat.clone();
 
         let cb_sink = siv.cb_sink().clone();
         siv.add_global_callback('q', |s| s.quit());
@@ -79,6 +80,11 @@ impl CursiveUI {
             .with_name("channel_list")
             .scrollable();
         let users_list = SelectView::<String>::new()
+            .on_submit(move |_: &mut Cursive, item: &String| {
+                tx_chat2
+                    .try_send(ChatEvent::DirectChat(item.clone()))
+                    .unwrap();
+            })
             .with_name("users_list")
             .scrollable();
         let channels = LinearLayout::vertical()

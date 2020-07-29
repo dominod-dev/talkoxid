@@ -129,6 +129,8 @@ impl Ord for Channel {
 pub enum ChatEvent {
     /// Used when the User send a message.
     SendMessage(String, Channel),
+    /// Used to create a direct chat with someone
+    DirectChat(String),
     /// Used when the User select a channel the first time
     /// or when he change the currently selected channel.
     Init(Channel),

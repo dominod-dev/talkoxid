@@ -137,7 +137,7 @@ where
                             .records
                             .iter()
                             .cloned()
-                            .map(|x| (x.username, x._id))
+                            .map(|x| (x.username.clone(), x.username))
                             .collect::<Vec<(String, String)>>();
                         self.tx_ui.send(UIEvent::UpdateUsersInRoom(users)).await?;
                     }
@@ -163,6 +163,9 @@ where
                 }
                 ChatEvent::Init(channel) => {
                     self.init_view(channel).await?;
+                }
+                ChatEvent::DirectChat(user) => {
+                    self.ws.create_direct_chat(user.into()).await?;
                 }
             };
         }
@@ -663,7 +666,7 @@ mod tests {
             Ok(UIEvent::UpdateUsersInRoom(users)) = msg => {
                 assert_eq!(
                     format!("{:?}", users),
-                    "[(\"usertest\", \"PqJNPhCjTElGpKtL3\")]".trim()
+                    "[(\"usertest\", \"usertest\")]".trim()
                 );
             },
             _ = message_loop => {panic!("Abnormal")},
@@ -686,7 +689,7 @@ mod tests {
             Ok(UIEvent::UpdateUsersInRoom(users)) = msg => {
                 assert_eq!(
                     format!("{:?}", users),
-                    "[(\"someone\", \"eqJNPhCjTEyGpKtL3\")]".trim()
+                    "[(\"someone\", \"someone\")]".trim()
                 );
             },
             _ = message_loop => {panic!("Abnormal")},
