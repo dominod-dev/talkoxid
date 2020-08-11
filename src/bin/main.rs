@@ -4,6 +4,7 @@ use std::error::Error;
 use talkoxid::chats::RocketChat;
 use talkoxid::config::{load_config, ChatConfig};
 use talkoxid::core::{Channel, Chat, ChatEvent, UIEvent, UI};
+use talkoxid::notifications::DesktopNotifier;
 use talkoxid::ui::CursiveUI;
 
 use log::LevelFilter;
@@ -25,6 +26,7 @@ async fn chat_loop(
         config.ssl_verify,
         tx_ui.clone(),
         rx_chat,
+        Box::new(DesktopNotifier {}),
     )
     .await
     {

@@ -216,3 +216,7 @@ pub trait UI {
     /// Start the main loop that listen to [UIEvent](enum.UIEvent.html)
     fn start_loop(&self) -> Result<(), Box<dyn Error + Send + Sync>>;
 }
+
+pub trait Notification {
+    fn notify(&self, title: &str, content: &str) -> Result<(), Box<dyn Error + Send + Sync>>;
+}

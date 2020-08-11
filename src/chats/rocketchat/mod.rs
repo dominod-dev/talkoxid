@@ -1,7 +1,7 @@
 mod api;
 mod schema;
 
-use super::super::core::{Channel, Chat, ChatEvent, Message, UIEvent};
+use super::super::core::{Channel, Chat, ChatEvent, Message, Notification, UIEvent};
 use api::{RocketChatWsWriter, WebSocketWriter};
 use async_channel::{unbounded, Receiver, Sender};
 use async_tls::TlsConnector;
@@ -58,6 +58,7 @@ fn resolve_ws_url(
 pub struct RocketChat<U: WebSocketWriter + Send + Sync> {
     tx_ui: Sender<UIEvent>,
     ws: U,
+    notifier: Box<dyn Notification + Sync + Send>,
     rx_ws: Receiver<tungstenite::Message>,
     ponger: Sender<tungstenite::Message>,
     rx_chat: Receiver<ChatEvent>,
@@ -87,6 +88,15 @@ where
                             x if x == "p" => Channel::Private(last_message.rid.clone()),
                             _ => Channel::Group(last_message.rid.clone()),
                         };
+                        if last_message.u.username != self.username {
+                            if let Channel::User(_) = channel {
+                                self.notifier
+                                    .notify(&last_message.u.username[..], &last_message.msg[..])?;
+                            } else if last_message.msg.contains(&self.username[..]) {
+                                self.notifier
+                                    .notify(&last_message.u.username[..], &last_message.msg[..])?;
+                            }
+                        }
                         self.add_message(
                             Message {
                                 author: last_message.u.username.clone(),
@@ -196,6 +206,7 @@ impl RocketChat<RocketChatWsWriter> {
         ssl_verify: bool,
         tx_ui: Sender<UIEvent>,
         rx_chat: Receiver<ChatEvent>,
+        notifier: Box<dyn Notification + Sync + Send>,
     ) -> Result<Self, Box<dyn Error + Send + Sync>> {
         let (ws_host, tls_config) = resolve_ws_url(host.clone(), ssl_verify)?;
         let (socket, _) =
@@ -230,6 +241,7 @@ impl RocketChat<RocketChatWsWriter> {
         Ok(RocketChat {
             tx_ui,
             ws,
+            notifier,
             rx_ws,
             ponger,
             rx_chat,
@@ -440,6 +452,7 @@ mod tests {
             tx_ui: Sender<UIEvent>,
             rx_ui: Receiver<ChatEvent>,
             ws: FakeWsWriter,
+            notifier: Box<dyn Notification + Sync + Send>,
         ) -> Result<(Self, Sender<tungstenite::Message>), Box<dyn Error + Send + Sync>> {
             let mut ws_host = host.clone();
             ws_host
@@ -458,9 +471,17 @@ mod tests {
                     rx_chat: rx_ui,
                     username,
                     current_channel: Mutex::new(Some(Channel::Group("test_channel".to_string()))),
+                    notifier,
                 },
                 tx_forwarder_ws,
             ))
+        }
+    }
+
+    struct FakeNotifier;
+    impl Notification for FakeNotifier {
+        fn notify(&self, _title: &str, _content: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
+            Ok(())
         }
     }
 
@@ -482,6 +503,7 @@ mod tests {
             tx_ui,
             rx_ws,
             ws,
+            Box::new(FakeNotifier {}),
         )
         .unwrap();
         (cloned_ws, rx_ui, chat, tx_ws)
