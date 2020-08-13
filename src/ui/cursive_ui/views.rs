@@ -1,49 +1,63 @@
 use async_channel::Sender;
 
 use cursive::event::{Event, EventResult, Key};
-use cursive::theme::{Color, ColorStyle, ColorType};
+use cursive::theme::{Color, PaletteColor, Theme};
 use cursive::traits::*;
 use cursive::view::{ScrollStrategy, ViewWrapper};
-use cursive::views::{EditView, NamedView, ScrollView, SelectView, TextView};
+use cursive::views::{NamedView, ScrollView, SelectView, TextArea, TextView};
 use cursive::wrap_impl;
-use cursive::{CbSink, Cursive};
+use cursive::{CbSink, Cursive, Printer};
 
 use std::error::Error;
 
 use super::super::super::core::{Channel, ChatEvent};
 
 pub struct MessageBoxView {
-    view: EditView,
+    view: TextArea,
     pub channel: Option<Channel>,
+    multiline: bool,
     tx: Sender<ChatEvent>,
 }
 
 impl MessageBoxView {
     pub fn new(channel: Option<Channel>, tx: Sender<ChatEvent>) -> Self {
-        let white = ColorType::Color(Color::Rgb(255, 255, 255));
-        let black = ColorType::Color(Color::Rgb(0, 0, 0));
-        let white_on_black = ColorStyle::new(black, white);
-        let view = EditView::new().style(white_on_black);
-        MessageBoxView { channel, tx, view }
+        let view = TextArea::new();
+        MessageBoxView {
+            channel,
+            tx,
+            view,
+            multiline: false,
+        }
     }
 }
 
 impl ViewWrapper for MessageBoxView {
-    wrap_impl!(self.view: EditView);
+    wrap_impl!(self.view: TextArea);
     fn wrap_on_event<'r>(&mut self, event: Event) -> EventResult {
         match event {
-            Event::Key(Key::Enter) => {
+            Event::Key(Key::Enter) if !self.multiline => {
                 self.tx
                     .try_send(ChatEvent::SendMessage(
-                        String::from(self.view.get_content().as_ref()),
+                        String::from(self.view.get_content()),
                         self.channel.clone().unwrap(),
                     ))
                     .unwrap();
                 self.view.set_content("");
                 EventResult::Consumed(None)
             }
+            Event::CtrlChar('l') => {
+                self.multiline = !self.multiline;
+                EventResult::Consumed(None)
+            }
             ev => self.view.on_event(ev),
         }
+    }
+    fn wrap_draw(&self, printer: &Printer) {
+        let black = Color::Rgb(0, 0, 0);
+        let mut theme = Theme::default();
+        theme.palette[PaletteColor::Secondary] = black;
+        let new_printer = printer.theme(&theme);
+        self.view.draw(&new_printer);
     }
 }
 

@@ -161,8 +161,9 @@ impl WebSocketWriter for RocketChatWsWriter {
                 ]
             }}
         "#,
-            room_id, content
+            room_id, content.replace("\n", "\\n")
         );
+        log::info!("{:?}", msg);
         self.websocket.send(tungstenite::Message::Text(msg)).await?;
         Ok(())
     }
