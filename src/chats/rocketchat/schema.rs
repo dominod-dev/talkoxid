@@ -52,6 +52,20 @@ pub struct SubStreamChannelWs {
     pub params: Vec<serde_json::Value>,
 }
 
+#[derive(Serialize, Debug)]
+pub struct SendMessageWs {
+    pub msg: String,
+    pub id: String,
+    pub method: String,
+    pub params: Vec<MessageWs>,
+}
+
+#[derive(Serialize, Debug)]
+pub struct MessageWs {
+    pub msg: String,
+    pub rid: String,
+}
+
 #[derive(Deserialize, Debug)]
 pub struct DateResponseWs {
     #[serde(rename = "$date")]

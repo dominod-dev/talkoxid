@@ -147,24 +147,19 @@ impl WebSocketWriter for RocketChatWsWriter {
         room_id: String,
         content: String,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
-        let msg = format!(
-            r#"
-            {{
-                "msg": "method",
-                "method": "sendMessage",
-                "id": "2",
-                "params": [
-                    {{
-                        "rid": "{}",
-                        "msg": "{}"
-                    }}
-                ]
-            }}
-        "#,
-            room_id, content.replace("\n", "\\n")
-        );
+        let msg = SendMessageWs {
+            msg: "method".to_string(),
+            method: "sendMessage".to_string(),
+            id: "2".to_string(),
+            params: vec![MessageWs {
+                rid: room_id,
+                msg: content,
+            }],
+        };
         log::info!("{:?}", msg);
-        self.websocket.send(tungstenite::Message::Text(msg)).await?;
+        self.websocket
+            .send(tungstenite::Message::Text(serde_json::to_string(&msg)?))
+            .await?;
         Ok(())
     }
 
