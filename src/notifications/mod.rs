@@ -11,15 +11,19 @@ impl Notification for DesktopNotifier {
         notify_rust::Notification::new()
             .summary(&title[..])
             .body(&content[..])
+            .timeout(20000)
             .show()?;
-        let device = rodio::default_output_device().unwrap();
+        if let Some(device) = rodio::default_output_device() {
+            let maybe_file =
+                File::open("/usr/share/sounds/freedesktop/stereo/message-new-instant.ogaa");
+            if let Ok(file) = maybe_file {
+                let maybe_source = rodio::Decoder::new(BufReader::new(file));
+                if let Ok(source) = maybe_source {
+                    rodio::play_raw(&device, source.convert_samples());
+                }
+            }
+        }
 
-        let file = File::open("/usr/share/sounds/freedesktop/stereo/message-new-instant.oga")?;
-        let source = rodio::Decoder::new(BufReader::new(file)).unwrap_or_else(|err| {
-            log::info!("{:?}", err);
-            panic!();
-        });
-        rodio::play_raw(&device, source.convert_samples());
         Ok(())
     }
 }
