@@ -156,7 +156,6 @@ impl WebSocketWriter for RocketChatWsWriter {
                 msg: content,
             }],
         };
-        log::info!("{:?}", msg);
         self.websocket
             .send(tungstenite::Message::Text(serde_json::to_string(&msg)?))
             .await?;
