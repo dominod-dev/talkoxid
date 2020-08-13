@@ -3,7 +3,7 @@ use super::super::core::{Channel, ChatEvent, Message, UIEvent, UI};
 use async_channel::{Receiver, Sender};
 use cursive::traits::*;
 use cursive::view::ScrollStrategy;
-use cursive::views::{LinearLayout, SelectView, TextView};
+use cursive::views::{LinearLayout, Panel, SelectView, TextView};
 use cursive::views::{NamedView, ScrollView};
 use cursive::{CbSink, Cursive};
 
@@ -96,8 +96,8 @@ impl CursiveUI {
             .child(users_list)
             .min_width(20);
         let chat_layout = LinearLayout::vertical()
-            .child(cursive::views::Panel::new(buffer).full_height())
-            .child(message_input_box)
+            .child(Panel::new(buffer).full_height())
+            .child(Panel::new(message_input_box))
             .full_width();
         let global_layout = LinearLayout::horizontal()
             .child(channels)
