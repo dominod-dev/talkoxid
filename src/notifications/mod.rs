@@ -13,14 +13,13 @@ impl Notification for DesktopNotifier {
             .body(&content[..])
             .timeout(20000)
             .show()?;
-        if let Some(device) = rodio::default_output_device() {
-            let maybe_file =
-                File::open("/usr/share/sounds/freedesktop/stereo/message-new-instant.ogaa");
-            if let Ok(file) = maybe_file {
-                let maybe_source = rodio::Decoder::new(BufReader::new(file));
-                if let Ok(source) = maybe_source {
-                    rodio::play_raw(&device, source.convert_samples());
-                }
+        let (_stream, stream_handle) = rodio::OutputStream::try_default()?;
+        let maybe_file =
+            File::open("/usr/share/sounds/freedesktop/stereo/message-new-instant.ogaa");
+        if let Ok(file) = maybe_file {
+            let maybe_source = rodio::Decoder::new(BufReader::new(file));
+            if let Ok(source) = maybe_source {
+                stream_handle.play_raw(source.convert_samples())?;
             }
         }
 

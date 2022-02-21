@@ -4,7 +4,6 @@ mod schema;
 use super::super::core::{Channel, Chat, ChatEvent, Message, Notification, UIEvent};
 use api::{RocketChatWsWriter, WebSocketWriter};
 use async_channel::{unbounded, Receiver, Sender};
-use async_tls::TlsConnector;
 use async_trait::async_trait;
 use async_tungstenite::tungstenite;
 use futures_util::StreamExt;
@@ -12,20 +11,23 @@ use log::error;
 use schema::*;
 use std::error::Error;
 use std::sync::{Arc, Mutex};
+use tokio_rustls::TlsConnector;
 use url::Url;
 use webpki_roots;
 
 struct NoCertificateVerification {}
 
-impl rustls::ServerCertVerifier for NoCertificateVerification {
+impl rustls::client::ServerCertVerifier for NoCertificateVerification {
     fn verify_server_cert(
         &self,
-        _roots: &rustls::RootCertStore,
-        _presented_certs: &[rustls::Certificate],
-        _dns_name: webpki::DNSNameRef<'_>,
-        _ocsp: &[u8],
-    ) -> Result<rustls::ServerCertVerified, rustls::TLSError> {
-        Ok(rustls::ServerCertVerified::assertion())
+        _end_entity: &rustls::Certificate,
+        _intermediates: &[rustls::Certificate],
+        _server_name: &rustls::ServerName,
+        _scts: &mut dyn Iterator<Item = &[u8]>,
+        _ocsp_response: &[u8],
+        _now: std::time::SystemTime,
+    ) -> Result<rustls::client::ServerCertVerified, rustls::Error> {
+        Ok(rustls::client::ServerCertVerified::assertion())
     }
 }
 fn resolve_ws_url(
@@ -34,16 +36,28 @@ fn resolve_ws_url(
 ) -> Result<(Url, Option<TlsConnector>), Box<dyn Error + Send + Sync>> {
     let (scheme, tls_config) = match url.scheme() {
         "https" => {
-            let mut tls_builder = rustls::ClientConfig::new();
-            tls_builder
-                .root_store
-                .add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
+            let mut root_store = rustls::RootCertStore::empty();
+            root_store.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(
+                |ta| {
+                    rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
+                        ta.subject,
+                        ta.spki,
+                        ta.name_constraints,
+                    )
+                },
+            ));
+            let mut tls_builder = rustls::ClientConfig::builder()
+                .with_safe_defaults()
+                .with_root_certificates(root_store)
+                .with_no_client_auth();
             if !ssl_verify {
-                tls_builder
-                    .dangerous()
-                    .set_certificate_verifier(Arc::new(NoCertificateVerification {}));
+                tls_builder = rustls::ClientConfig::builder()
+                    .with_safe_defaults()
+                    .with_custom_certificate_verifier(Arc::new(NoCertificateVerification {}))
+                    .with_no_client_auth();
             }
-            ("wss", Some(tls_builder.into()))
+            let connector = TlsConnector::from(Arc::new(tls_builder));
+            ("wss", Some(connector.into()))
         }
         _ => ("ws", None),
     };

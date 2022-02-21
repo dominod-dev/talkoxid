@@ -5,7 +5,7 @@ use cursive::traits::*;
 use cursive::view::ScrollStrategy;
 use cursive::views::{LinearLayout, Panel, SelectView, TextView};
 use cursive::views::{NamedView, ScrollView};
-use cursive::{CbSink, Cursive};
+use cursive::{CbSink, Cursive, CursiveRunnable, CursiveRunner};
 
 use log::error;
 
@@ -55,7 +55,7 @@ fn on_channel_changed(tx_chat: Sender<ChatEvent>) -> impl Fn(&mut Cursive, &Chan
 /// This type is a terminal user interface using the cursive library.
 pub struct CursiveUI {
     cb_sink: CbSink,
-    siv: RefCell<Cursive>,
+    siv: RefCell<CursiveRunner<CursiveRunnable>>,
     rx_ui: Receiver<UIEvent>,
 }
 
@@ -108,7 +108,7 @@ impl CursiveUI {
         siv.focus_name("input").unwrap();
         CursiveUI {
             cb_sink,
-            siv: RefCell::new(siv),
+            siv: RefCell::new(siv.into_runner()),
             rx_ui,
         }
     }

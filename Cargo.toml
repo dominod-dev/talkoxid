@@ -12,14 +12,13 @@ name = "talkoxid"
 [dependencies]
 serde_json = { version = "^1.0", default-features=false, features=["std"] }
 serde = { version = "^1.0", features = ["derive"], default-features=false }
-async-tungstenite = { version = "^0.8", default-features=false, features = ["tokio-runtime", "async-tls"] }
-async-tls = { version = "^0.9", default-features=false }
-rustls = { version = "^0.18", default-features=false, features = ["dangerous_configuration"] }
-url = { version = "^2.1.0", default-features=false }
+async-tungstenite = { version = "^0.16", default-features=false, features = ["tokio-runtime", "tokio-rustls-webpki-roots"] }
+rustls = { version = "^0.20", default-features=false, features = ["dangerous_configuration"] }
+url = { version = "^2", default-features=false }
 webpki-roots = { version = "^0.20.0", default-features=false }
-webpki = { version = "^0.21", default-features=false }
-sha2 = { version = "^0.9.0", default-features=false }
-tokio = { version = "^0.2", default-features=false, features = ["rt-threaded", "macros", "blocking"] }
+webpki = { version = "^0.22", default-features=false }
+sha2 = { version = "^0.10", default-features=false }
+tokio = { version = "^1", default-features=false, features = ["rt", "rt-multi-thread", "macros"] }
 async-trait = { version = "^0.1", default-features=false }
 futures-util = { version = "^0.3", default-features=false }
 async-channel = { version = "^1.1", default-features=false }
@@ -29,16 +28,17 @@ chrono = { version = "^0.4", default-features=false, features = ["serde"] }
 clap = { version = "^2.33", default-features=false, features = ["yaml"] }
 toml = { version = "^0.5", default-features=false }
 dirs-next = { version = "^1.0", default-features=false }
-notify-rust = { version = "^4", default-features=false }
-rodio = { version = "^0.11" }
+notify-rust = { version = "^4", default-features=false, features = ["dbus"] }
+tokio-rustls = { version = "^0.23", default-features=false }
+rodio = { version = "^0.15" }
 
 [target.'cfg(windows)'.dependencies.cursive]
-version = "^0.15"
+version = "^0.17"
 default-features = false
 features = ["toml", "crossterm-backend"]
 
 
 [target.'cfg(unix)'.dependencies.cursive]
-version = "^0.15"
+version = "^0.17"
 default-features = false
 features = ["toml", "termion-backend"]
